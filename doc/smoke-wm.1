@@ -1,0 +1,47 @@
+.TH SMOKE-WM 1 "alpha" "smoke-wm" "wayporize manual"
+.SH NAME
+smoke-wm - Robust and modern X11 tiling window manager
+.
+.SH SYNOPSIS
+.B smoke-wm
+.RI [ OPTION... ]
+.
+.SH OPTION
+.PP
+.BR -h ,
+.BR --help ,
+.B --usage
+.IP
+Show help on how to use the
+.B smoke-wm
+command.
+.PP
+.BR -v ,
+.B --version
+.IP
+Show the version and versions of related software.
+.
+.SH DESCRIPTION
+.B smoke-wm
+is a dynamic auto tiler and workspacer that arranges windows on two layers, the
+tiling and floating layer.
+Tiling windows are arranged according to the configured layout per workspace.
+Floating windows are freely positioned and their initial position is in a way
+the wm seems fit.
+
+.B smoke-wm
+can be configured through a simple
+.B TOML
+confguration file.
+See
+.BR smoke-wm (5).
+
+.B smoke-wm
+implements ICCCM and EWMH with virtual desktops.
+.
+.SH USAGE
+.B smoke-wm
+needs an X server to run on.
+It needs to be run instead of the other active X window manager.
+This is usually achievable by editing the system configuration or the
+configuration file of the X server.
