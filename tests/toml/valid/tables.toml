@@ -1,0 +1,35 @@
+[wm]
+
+[wm.gaps]
+
+[wm.border]
+
+    [wm.border.radius]
+
+[wm.border.color]
+
+[[wm.monitor]]
+
+[[wm.window]]
+
+[ wm.bindings ]
+
+[[wm.binding]]
+
+[[wm.startup]]
+
+[wm.gaps]
+
+[wm.border]
+
+[wm.border   .radius]
+
+[wm.   border.color]
+
+[[wm."mon\x69tor"]]
+
+[wm . bindings]
+
+[[wm. 'binding' ]]
+
+[[wm. "\x73tartup"]]

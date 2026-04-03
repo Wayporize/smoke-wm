@@ -1,0 +1,25 @@
+[[wm.window]]
+name = "Hello"
+name = 'Hello'
+name = """Hello"""
+name = '''Hello'''
+name = """Mr Joe: "I want this to be done by tomorrow!""""
+name = """
+
+The first line break is ignored but not the one before this.
+Hello, this is a paragraph.
+
+Some math symbols: \u2240 \u2241 \u2242 \u2243 \u2244 \u2245
+
+And this is another one."""
+name = '''
+Hello you sittle little goose \ \ <--- two backslashes, no new lines'''
+name = """Hello
+I seem to have new lines but I don't \
+because I use \\ at the end. \
+Isn't that amazing? \
+No? Then pretend it is."""
+name = "Hello"
+name = "Hello"
+name = "Hello"
+name = "Hello"

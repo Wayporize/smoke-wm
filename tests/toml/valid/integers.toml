@@ -1,0 +1,16 @@
+wm.border.size =   0
+wm.border.size           =   +0
+wm.border.size = -0
+wm.border.size =       +123
+wm.border.size =     0x18ab
+wm.border.size = 0b0001
+wm.border.size    = 0o0743
+wm.border.size  =  -48
+wm.border.size = 999
+wm.border.size = 9_999_000
+wm.border.size = -1_1
+wm.border.size = 0xa4_84_a4_00
+
+[wm.border]
+
+size = 9999
