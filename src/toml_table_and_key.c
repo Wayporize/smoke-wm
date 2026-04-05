@@ -188,26 +188,31 @@ static unsigned get_sub_table(struct toml_parse_context *context,
 static void append_wm_monitor(struct toml_parse_context *context)
 {
     LIST_APPEND(context->wm.monitor, NULL, 1);
+    ZERO(&context->wm.monitor[context->wm.monitor_length - 1], 1);
 }
 
 static void append_wm_workspace(struct toml_parse_context *context)
 {
     LIST_APPEND(context->wm.workspace, NULL, 1);
+    ZERO(&context->wm.workspace[context->wm.workspace_length - 1], 1);
 }
 
 static void append_wm_window(struct toml_parse_context *context)
 {
     LIST_APPEND(context->wm.window, NULL, 1);
+    ZERO(&context->wm.window[context->wm.window_length - 1], 1);
 }
 
 static void append_wm_binding(struct toml_parse_context *context)
 {
     LIST_APPEND(context->wm.binding, NULL, 1);
+    ZERO(&context->wm.binding[context->wm.binding_length - 1], 1);
 }
 
 static void append_wm_startup(struct toml_parse_context *context)
 {
     LIST_APPEND(context->wm.startup, NULL, 1);
+    ZERO(&context->wm.startup[context->wm.startup_length - 1], 1);
 }
 
 static void parse_border_size(struct toml_parse_context *context,
@@ -617,6 +622,7 @@ static void parse_wm_monitor_name(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.monitor[context->wm.monitor_length - 1].name);
     context->wm.monitor[context->wm.monitor_length - 1].name =
         xstrdup(context->string);
 }
@@ -640,6 +646,7 @@ static void parse_wm_workspace_name(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.workspace[context->wm.workspace_length - 1].name);
     context->wm.workspace[context->wm.workspace_length - 1].name =
         xstrdup(context->string);
 }
@@ -665,6 +672,7 @@ static void parse_wm_workspace_monitor(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.workspace[context->wm.workspace_length - 1].monitor);
     context->wm.workspace[context->wm.workspace_length - 1].monitor =
         xstrdup(context->string);
 }
@@ -688,6 +696,7 @@ static void parse_wm_window_name(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.window[context->wm.window_length - 1].monitor);
     context->wm.window[context->wm.window_length - 1].name =
         xstrdup(context->string);
 }
@@ -700,6 +709,7 @@ static void parse_wm_window_class(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.window[context->wm.window_length - 1].class);
     context->wm.window[context->wm.window_length - 1].class =
         xstrdup(context->string);
 }
@@ -712,6 +722,7 @@ static void parse_wm_window_instance(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.window[context->wm.window_length - 1].instance);
     context->wm.window[context->wm.window_length - 1].instance =
         xstrdup(context->string);
 }
@@ -724,6 +735,7 @@ static void parse_wm_window_workspace(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.window[context->wm.window_length - 1].workspace);
     context->wm.window[context->wm.window_length - 1].workspace =
         xstrdup(context->string);
 }
@@ -736,6 +748,7 @@ static void parse_wm_window_monitor(struct toml_parse_context *context)
     }
 
     read_any_string(context);
+    free(context->wm.window[context->wm.window_length - 1].monitor);
     context->wm.window[context->wm.window_length - 1].monitor =
         xstrdup(context->string);
 }
