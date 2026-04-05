@@ -1,8 +1,8 @@
 #include <ctype.h>
 
 /**
- * This file is the root of the TOML parser for TOML configuration files.  TOML
- * was chosen for its simplicity.
+ * This file is the root of the TOML parser for TOML configuration files.
+ * TOML was chosen for its simplicity.
  */
 
 #include "toml.h"
@@ -12,7 +12,7 @@ static void get_stream_position(struct toml_parse_context *context,
         unsigned *line, unsigned *column)
 {
     unsigned current_line = 0, current_column = 0;
-    int character, other;
+    int character;
 
     rewind(context->file);
 
@@ -38,7 +38,7 @@ static void get_stream_position(struct toml_parse_context *context,
 /* Get the beginning of the line at given line index. */
 static void print_line(struct toml_parse_context *context, unsigned line)
 {
-    int character, other;
+    int character;
 
     rewind(context->file);
 
