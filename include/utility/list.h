@@ -55,9 +55,19 @@
     name##_length = 0; \
 } while (0)
 
-/* Clear given list.
+/* Trim the allocated memory to the used list size.
  *
  * T*   @name is the name of the list.
+ *
+ * void @return
+ */
+#define LIST_TRIM(name) do { \
+    REALLOCATE(name, name##_length); \
+} while (0)
+
+/* Clear given list.
+ *
+ * T* @name is the name of the list.
  *
  * void @return
  */

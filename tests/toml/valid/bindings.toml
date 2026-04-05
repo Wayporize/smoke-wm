@@ -1,0 +1,34 @@
+[[wm.binding]]
+release = false
+modifiers = "Shift"
+key-code = 24
+action = "close"
+
+[wm.bindings]
+
+"Mod4+h" = "move:left"
+
+[[wm.binding]]
+transparent = true
+button = "Left"
+action = "focus"
+argument = "pressed"
+
+
+[[wm.binding]]
+modifiers = "Mod4"
+key = "a"
+action = "focus"
+argument = "left"
+
+[[wm.binding]]
+modifiers = "Control+Lock+Shift+Mod1+Mod2+Mod3+Mod4"
+button = "Button0"
+button = "Button1"
+button = "Button19"
+button = "Button99"
+button = "X7"
+button = "X1"
+button = "Left"
+button = "MButton"
+button = "WheelDown"

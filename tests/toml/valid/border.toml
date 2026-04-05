@@ -1,0 +1,20 @@
+[wm.border]
+size = 3
+decoration = "full"
+radius.inner = 4
+radius.outer = 4
+color.focused = "red"
+color.highlight = "blue"
+color.inactive = "gray"
+color.floating = "red"
+color.tiling = "yellow"
+
+[[wm.window]]
+class = "thick™"
+border.size = 0x6
+border.decoration = "simple"
+border.radius.inner = 0
+border.radius.outer = 0
+border.color = {
+    focused = "green"
+}

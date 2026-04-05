@@ -9,6 +9,7 @@
  */
 
 #include <stdlib.h> /* NULL, size_t, malloc(), calloc(), realloc(), free() */
+#include <wchar.h> /* wchar_t */
 
 #include "utility/attributes.h" /* _Nullable */
 

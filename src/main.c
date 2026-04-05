@@ -8,6 +8,9 @@
 #include <sys/types.h>
 #include <utility/utility.h>
 
+#include "configuration.h"
+#include "toml.h"
+
 /* name of the executable argument used when running the program */
 char *program_name;
 
@@ -22,7 +25,7 @@ void show_usage(int exit_code)
             program_name);
     puts("Options:\n\
             -h, --help, --usage Show this help\n\
-            -v, --version       Show the version\n");
+            -v, --version       Show the version");
     exit(exit_code);
 }
 
@@ -39,6 +42,9 @@ int main(int argc, char **argv)
     uid_t user_id;
     const char *home;
     struct passwd *passwd;
+    char *path;
+
+    (void) setlocale(LC_ALL, "");
 
     /* store the first argument containing the executable */
     program_name = argv[0];
@@ -56,8 +62,6 @@ int main(int argc, char **argv)
             show_usage(EXIT_FAILURE);
         }
     }
-
-    (void) setlocale(LC_ALL, "");
 
     /* get the user id and refuse to run as root */
     user_id = getuid();
@@ -83,6 +87,14 @@ int main(int argc, char **argv)
     /* TODO: read configuration from the config directory or
      * /usr/share/smoke-wm/config.toml if not present
      */
+    path = get_configuration_path();
+
+    printf("configuration path: %s\n",
+            path);
+
+    if (path != NULL) {
+        parse_toml_configuration(path, &Configuration);
+    }
 
     return 0;
 }

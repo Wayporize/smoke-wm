@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
-make
+make || exit
 
 check_home() {
     case $1 in

@@ -1,9 +1,9 @@
 #!/bin/sh
 
-invalid_arguments=invalid
-valid_arguments=-h\ --help\ --usage\ -v\ --version
+make || exit
 
-make
+invalid_arguments=invalid\ -e\ --h
+valid_arguments=-h\ --help\ --usage\ -v\ --version
 
 for a in $invalid_arguments ; do
     if ./build/smoke-wm $a >/dev/null ; then

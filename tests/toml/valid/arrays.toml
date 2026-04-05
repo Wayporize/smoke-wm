@@ -1,0 +1,34 @@
+[[wm.binding]]
+
+release = true
+key = 'a'
+action = "none"
+
+[[wm.window]]
+class = "something"
+
+[wm.window.border]
+color.focused = "#ff0000"
+
+[[wm.window]]
+name = "a"
+class = "a"
+instance = "a"
+workspace = "a"
+monitor = "a"
+hidden = false
+mode = "tiling"
+border = {
+    size = 2,
+    radius = {
+        inner = 7,
+        outer = 8
+    },
+    color = {
+        focused = "#ff0000",
+        highlight = "#ff0000",
+        inactive = "#ff0000",
+        floating = "#ff0000",
+        tiling = "#ff0000"
+    }
+}

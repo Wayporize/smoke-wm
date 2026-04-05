@@ -1,0 +1,4 @@
+wm.startup = [
+    { action = "run", argument = "programA" },
+    { action = "shell", argument = "shellProgramA" },
+]

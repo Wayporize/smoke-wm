@@ -155,25 +155,6 @@ int run_shell(const char *command);
  */
 char *run_shell_and_get_output(const char *command);
 
-/* Check if a character is a line ending character.
- *
- * This includes \n, \v, \f and \r.
- */
-int islineend(int character);
-
-/* Get the graphical width of a wide character. */
-int wcwidth(wchar_t wide_character);
-
-/* Get the length of @string up to a maximum of @max_length. */
-size_t strnlen(const char *string, size_t max_length);
-
-/* Compare two strings while ignoring case.
- *
- * @return 0 for equality, a negative value if @string1 < @string2,
- *         otherwise a positive value.
- */
-int strcasecmp(const char *string1, const char *string2);
-
 /* Match a string against a pattern.
  *
  * Pattern metacharacters are ?, *, [.  They can be escaped using \ to match

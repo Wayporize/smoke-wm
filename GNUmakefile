@@ -2,10 +2,10 @@
 CC := cc
 
 # Packages
-PACKAGES := x11
+PACKAGES := xcb xkbcommon
 
 # Compiler flags
-C_FLAGS := -std=c11 -Iinclude \
+C_FLAGS := -std=c99 -D_XOPEN_SOURCE=700 -Iinclude \
            -Wall -Wextra -Wpedantic -Wno-format-zero-length \
            $(shell pkg-config --cflags $(PACKAGES))
 DEBUG_FLAGS := -DDEBUG -g -fsanitize=address $(C_FLAGS)
@@ -46,7 +46,7 @@ build/smoke-wm: $(OBJECTS)
 .PHONY: analyze build sandbox clean
 
 analyze:
-	gcc -fanalyzer $(DEBUG_FLAGS) $(SOURCES)
+	gcc -fanalyzer $(DEBUG_FLAGS) $(SOURCES) $(C_LIBRARIES)
 
 build: build/smoke-wm
 
