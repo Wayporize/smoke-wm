@@ -288,7 +288,6 @@ static void parse_layout(struct toml_parse_context *context,
         enum tiling_layout *layout_pointer)
 {
     const char *layouts[] = {
-        [TILE_UNSPECIFIED] = "unspecified",
         [TILE_AUTO]        = "auto",
         [TILE_STACK]       = "stack",
         [TILE_HORIZONTAL]  = "horizontal",
@@ -305,7 +304,6 @@ static void parse_layout(struct toml_parse_context *context,
         layout = 0;
     } else {
         switch (context->string[1]) {
-        case 'n': layout = TILE_UNSPECIFIED; break;
         case 'u': layout = TILE_AUTO; break;
         case 't': layout = TILE_STACK; break;
         case 'o': layout = TILE_HORIZONTAL; break;
@@ -318,7 +316,6 @@ static void parse_layout(struct toml_parse_context *context,
 
     if (strcmp(layouts[layout], context->string) != 0) {
         emit_error(context, "invalid layout constant, choose one of:\n"
-                "unspecified,\n"
                 "auto (choose a sensible layout for the monitor dimensions),\n"
                 "stack (stack windows on top of each other),\n"
                 "horizontal (align windows on a horizontal line),\n"
@@ -334,7 +331,6 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
         const char *string)
 {
     const char *modes[] = {
-        [WINDOW_UNSPECIFIED] = "unspecified",
         [WINDOW_TILING] = "tiling",
         [WINDOW_FLOATING] = "floating",
         [WINDOW_FULLSCREEN] = "fullscreen",
@@ -356,7 +352,7 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
 
     if (strcmp(modes[mode], context->string) != 0) {
         emit_error(context, "invalid mode constant, choose one of: "
-                "unspecified, tiling, floating, fullscreen");
+                "tiling, floating, fullscreen");
     }
 
     return mode;
@@ -716,7 +712,7 @@ static void parse_wm_window_name(struct toml_parse_context *context)
     }
 
     read_any_string(context);
-    free(context->wm.window[context->wm.window_length - 1].monitor);
+    free(context->wm.window[context->wm.window_length - 1].name);
     context->wm.window[context->wm.window_length - 1].name =
         xstrdup(context->string);
 }

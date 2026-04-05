@@ -28,9 +28,10 @@ enum window_mode {
 };
 
 enum border_decoration {
+    BORDER_UNSPECIFIED,
     BORDER_NONE,
     BORDER_SIMPLE,
-    BORDER_FULL,
+    BORDER_FULL
 };
 
 enum action_type {
@@ -126,15 +127,8 @@ extern struct wm {
         struct wm_border border;
     }, window);
 
-    /* TODO: make this a hashmap */
     /* [[wm.binding]] / [wm.bindings] */
-    /* KEY(is_release, key_symbol, key_code, button) */
     LIST(struct wm_binding {
-        /* position of the definition of this binding within the configuration
-         * file
-         */
-        long file_position;
-
         /* if the key/button needs to be released for this binding to trigger */
         bool is_release;
         /* if button presses pass through to the underlying window */

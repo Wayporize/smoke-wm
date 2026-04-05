@@ -13,7 +13,31 @@ struct wm Configuration;
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm)
 {
-    /* TODO: free more */
+    for (size_t i = 0; i < wm->monitor_length; i++) {
+        free(wm->monitor[i].name);
+    }
+    free(wm->monitor);
+
+    for (size_t i = 0; i < wm->workspace_length; i++) {
+        free(wm->workspace[i].name);
+        free(wm->workspace[i].monitor);
+    }
+    free(wm->workspace);
+
+    for (size_t i = 0; i < wm->window_length; i++) {
+        free(wm->window[i].name);
+        free(wm->window[i].class);
+        free(wm->window[i].instance);
+        free(wm->window[i].workspace);
+        free(wm->window[i].monitor);
+    }
+    free(wm->window);
+
+    for (size_t i = 0; i < wm->binding_length; i++) {
+        /* wm->binding[i].value TODO: clear action value */
+    }
+    free(wm->binding);
+
     for (size_t i = 0; i < wm->startup_length; i++) {
         /* wm->startup[i].value TODO: clear action value */
     }
