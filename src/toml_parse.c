@@ -20,17 +20,9 @@ static void get_stream_position(struct toml_parse_context *context,
             ftell(context->file) <= context->item_index) {
         if (isprint(character)) {
             current_column++;
-        } else if (character == '\r' || character == '\n') {
+        } else if (character == '\n') {
             current_column = 0;
             current_line++;
-            other = fgetc(context->file);
-            /* put \r\n and \n\r together */
-            if ((other == '\n' && character == '\r') ||
-                    (other == '\r' && character == '\n')) {
-                /* yippie */
-            } else {
-                ungetc(other, context->file);
-            }
         } else if (character == '\t') {
             current_column += 4;
         } else {
@@ -51,16 +43,7 @@ static void print_line(struct toml_parse_context *context, unsigned line)
     rewind(context->file);
 
     while (character = fgetc(context->file), !feof(context->file)) {
-        if (character == '\r' || character == '\n') {
-            other = fgetc(context->file);
-            /* put \r\n and \n\r together */
-            if ((other == '\n' && character == '\r') ||
-                    (other == '\r' && character == '\n')) {
-                /* yay */
-            } else {
-                ungetc(other, context->file);
-            }
-
+        if (character == '\n') {
             if (line == 0) {
                 break;
             }
@@ -117,7 +100,7 @@ int skip_space(struct toml_parse_context *context, bool skip_new_lines)
         if (character == '#') {
             while (character = fgetc(context->file),
                     character != EOF &&
-                    character != '\r' && character != '\n') {
+                    character != '\n') {
                 /* nothing */
             }
         }
