@@ -18,5 +18,3 @@ for a in $valid_arguments ; do
         exit 1
     fi
 done
-
-echo "Usage tests succeded"

@@ -23,5 +23,3 @@ done
 while read -r line ; do
     check_home $line $HOME
 done < <(HOME= ./build/smoke-wm)
-
-echo home is correctly interpreted
