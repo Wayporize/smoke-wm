@@ -104,7 +104,7 @@ extern struct wm {
         unsigned number;
         /* the monitor this workspace is supposed to be on */
         char *monitor;
-        /* layout to used for this workspace */
+        /* layout to use for this workspace */
         enum tiling_layout layout;
     }, workspace);
 
