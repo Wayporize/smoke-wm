@@ -75,6 +75,8 @@ extern struct wm {
 
         /* [wm.border.color] */
         struct wm_border_color {
+            /* for each color, alpha == 0 indicates that this value is not set
+             */
             /* the color of the border when the window is focused */
             xcb_render_color_t focused;
             /* the secondary focused color of the border */
@@ -154,7 +156,7 @@ extern struct wm {
         /* the value of the action, not every action has this */
         union action_value value;
     }, startup);
-} Configuration;
+} Configuration, Configuration_default;
 
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm);

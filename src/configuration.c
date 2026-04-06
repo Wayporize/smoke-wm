@@ -10,6 +10,26 @@
 /* the globally accessible configuration object */
 struct wm Configuration;
 
+/* the basic configuration default options */
+struct wm Configuration_default = {
+    .tiling.layout = TILE_AUTO,
+    .tiling.gaps.inner[0] = 4,
+    .tiling.gaps.inner[1] = 4,
+    .tiling.gaps.inner[2] = 4,
+    .tiling.gaps.inner[3] = 4,
+    .border.size = 2,
+    .border.decoration = BORDER_FULL,
+    .border.radius.inner = 7,
+    .border.radius.outer = 8,
+    /* TODO: these are just placeholder colors */
+    .border.color.focused.alpha = 0xffff,
+    .border.color.focused.red = 0xffff,
+    .border.color.highlight.alpha = 0xffff,
+    .border.color.highlight.green = 0xffff,
+    .border.color.inactive.alpha = 0xffff,
+    .border.color.inactive.blue = 0xffff
+};
+
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm)
 {

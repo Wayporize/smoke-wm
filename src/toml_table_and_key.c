@@ -202,8 +202,17 @@ static void append_wm_workspace(struct toml_parse_context *context)
 
 static void append_wm_window(struct toml_parse_context *context)
 {
+    struct wm_window *window;
+
     LIST_APPEND(context->wm.window, NULL, 1);
-    ZERO(&context->wm.window[context->wm.window_length - 1], 1);
+    window = &context->wm.window[context->wm.window_length - 1];
+    ZERO(window, 1);
+    /* set markers for "unset", they will be resolved after the parsing
+     * completed
+     */
+    window->border.size = -1;
+    window->border.radius.inner = -1;
+    window->border.radius.outer = -1;
 }
 
 static void append_wm_binding(struct toml_parse_context *context)
