@@ -1,6 +1,8 @@
 [wm]
 
-[wm.gaps]
+[wm.tiling]
+
+[wm.tiling.gaps]
 
 [wm.border]
 
@@ -18,7 +20,7 @@
 
 [[wm.startup]]
 
-[wm.gaps]
+[wm.tiling.gaps]
 
 [wm.border]
 

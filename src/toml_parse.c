@@ -1,8 +1,8 @@
 #include <ctype.h>
 
 /**
- * This file is the root of the TOML parser for TOML configuration files.  TOML
- * was chosen for its simplicity.
+ * This file is the root of the TOML parser for TOML configuration files.
+ * TOML was chosen for its simplicity.
  */
 
 #include "toml.h"
@@ -12,7 +12,7 @@ static void get_stream_position(struct toml_parse_context *context,
         unsigned *line, unsigned *column)
 {
     unsigned current_line = 0, current_column = 0;
-    int character, other;
+    int character;
 
     rewind(context->file);
 
@@ -38,7 +38,7 @@ static void get_stream_position(struct toml_parse_context *context,
 /* Get the beginning of the line at given line index. */
 static void print_line(struct toml_parse_context *context, unsigned line)
 {
-    int character, other;
+    int character;
 
     rewind(context->file);
 
@@ -121,6 +121,7 @@ int parse_toml_configuration(const char *file_path, struct wm *wm)
     struct toml_parse_context context;
 
     ZERO(&context, 1);
+    context.wm = Configuration_default;
 
     context.file_path = file_path;
     context.file = fopen(file_path, "r");
@@ -145,6 +146,51 @@ int parse_toml_configuration(const char *file_path, struct wm *wm)
 
     /* set the configuration or simply clear the build */
     if (status == 0) {
+        /* resolve unset values for floating/tiling */
+        if (context.wm.border.color.floating.alpha == 0) {
+            context.wm.border.color.floating = context.wm.border.color.focused;
+        }
+        if (context.wm.border.color.tiling.alpha == 0) {
+            context.wm.border.color.tiling = context.wm.border.color.focused;
+        }
+
+        /* resolve unset values for window entries */
+        for (size_t i = 0; i < context.wm.window_length; i++) {
+            struct wm_border *border = &context.wm.window[i].border;
+
+            if (border->size == -1) {
+                border->size = context.wm.border.size;
+            }
+
+            if (border->decoration == BORDER_UNSPECIFIED) {
+                border->decoration = context.wm.border.decoration;
+            }
+
+            if (border->radius.inner == -1) {
+                border->radius.inner = context.wm.border.radius.inner;
+            }
+
+            if (border->radius.outer == -1) {
+                border->radius.outer = context.wm.border.radius.outer;
+            }
+
+            if (border->color.focused.alpha == 0) {
+                border->color.focused = context.wm.border.color.focused;
+            }
+            if (border->color.highlight.alpha == 0) {
+                border->color.highlight = context.wm.border.color.highlight;
+            }
+            if (border->color.inactive.alpha == 0) {
+                border->color.inactive = context.wm.border.color.inactive;
+            }
+            if (border->color.tiling.alpha == 0) {
+                border->color.tiling = context.wm.border.color.tiling;
+            }
+            if (border->color.floating.alpha == 0) {
+                border->color.floating = context.wm.border.color.floating;
+            }
+        }
+
         *wm = context.wm;
     } else {
         clear_configuration(&context.wm);

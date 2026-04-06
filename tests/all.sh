@@ -1,5 +1,5 @@
 #!/bin/sh
 
-./tests/usage.sh &&
-./tests/home.sh &&
-./tests/toml.sh
+for f in usage home toml configuration ; do
+    "./tests/$f.sh" && echo "$f tests succeeded" || exit
+done

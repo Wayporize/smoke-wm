@@ -1,4 +1,4 @@
-[wm]
+[wm.tiling]
 
 gaps.inner = [ 3, 6 ]
 gaps.outer = [ 0, 1, 0, 2 ]

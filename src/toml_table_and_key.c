@@ -37,7 +37,8 @@ static void parse_action(struct toml_parse_context *context, enum action_type *t
 static void parse_action_value(struct toml_parse_context *context, union action_value *value);
 
 /* parse functions for specific keys */
-static void parse_wm_gaps(struct toml_parse_context *context);
+static void parse_wm_tiling_layout(struct toml_parse_context *context);
+static void parse_wm_tiling_gaps(struct toml_parse_context *context);
 static void parse_wm_border_size(struct toml_parse_context *context);
 static void parse_wm_border_decoration(struct toml_parse_context *context);
 static void parse_wm_border_radius(struct toml_parse_context *context);
@@ -88,9 +89,11 @@ static const struct {
      */
     { 0, "dummy-root", NULL, NULL },
     { 1, "wm", NULL, NULL },
-        { 2, "gaps", NULL, NULL },
-            { 3, "inner", parse_wm_gaps, NULL },
-            { 3, "outer", parse_wm_gaps, NULL },
+        { 2, "tiling", NULL, NULL },
+            { 3, "layout", parse_wm_tiling_layout, NULL },
+            { 3, "gaps", NULL, NULL },
+                { 4, "inner", parse_wm_tiling_gaps, NULL },
+                { 4, "outer", parse_wm_tiling_gaps, NULL },
         { 2, "border", NULL, NULL },
             { 3, "size", parse_wm_border_size, NULL },
             { 3, "decoration", parse_wm_border_decoration, NULL },
@@ -199,8 +202,17 @@ static void append_wm_workspace(struct toml_parse_context *context)
 
 static void append_wm_window(struct toml_parse_context *context)
 {
+    struct wm_window *window;
+
     LIST_APPEND(context->wm.window, NULL, 1);
-    ZERO(&context->wm.window[context->wm.window_length - 1], 1);
+    window = &context->wm.window[context->wm.window_length - 1];
+    ZERO(window, 1);
+    /* set markers for "unset", they will be resolved after the parsing
+     * completed
+     */
+    window->border.size = -1;
+    window->border.radius.inner = -1;
+    window->border.radius.outer = -1;
 }
 
 static void append_wm_binding(struct toml_parse_context *context)
@@ -285,31 +297,40 @@ static void parse_layout(struct toml_parse_context *context,
         enum tiling_layout *layout_pointer)
 {
     const char *layouts[] = {
-        [TILE_UNSPECIFIED] = "unspecified",
-        [TILE_MANUAL] = "manual",
-        [TILE_HORIZONTAL] = "horizontal",
-        [TILE_VERTICAL] = "vertical",
-        [TILE_GRID] = "grid",
-        [TILE_SPIRAL] = "spiral"
+        [TILE_AUTO]        = "auto",
+        [TILE_STACK]       = "stack",
+        [TILE_HORIZONTAL]  = "horizontal",
+        [TILE_VERTICAL]    = "vertical",
+        [TILE_GRID]        = "grid",
+        [TILE_SPIRAL]      = "spiral"
     };
 
     enum tiling_layout layout;
 
     read_any_string(context);
 
-    switch (context->string[0]) {
-    case 'u': layout = TILE_UNSPECIFIED; break;
-    case 'm': layout = TILE_MANUAL; break;
-    case 'h': layout = TILE_HORIZONTAL; break;
-    case 'v': layout = TILE_VERTICAL; break;
-    case 'g': layout = TILE_GRID; break;
-    case 's': layout = TILE_SPIRAL; break;
-    default: layout = 0; break;
+    if (context->string[0] == '\0') {
+        layout = 0;
+    } else {
+        switch (context->string[1]) {
+        case 'u': layout = TILE_AUTO; break;
+        case 't': layout = TILE_STACK; break;
+        case 'o': layout = TILE_HORIZONTAL; break;
+        case 'e': layout = TILE_VERTICAL; break;
+        case 'r': layout = TILE_GRID; break;
+        case 'p': layout = TILE_SPIRAL; break;
+        default: layout = 0; break;
+        }
     }
 
     if (strcmp(layouts[layout], context->string) != 0) {
-        emit_error(context, "invalid layout constant, choose one of: "
-                "unspecified, manual, horizontal, vertical, grid, spiral");
+        emit_error(context, "invalid layout constant, choose one of:\n"
+                "auto (choose a sensible layout for the monitor dimensions),\n"
+                "stack (stack windows on top of each other),\n"
+                "horizontal (align windows on a horizontal line),\n"
+                "vertical (...vertical line),\n"
+                "grid (put windows on a grid),\n"
+                "spiral (split into the bottom right corner)");
     }
 
     *layout_pointer = layout;
@@ -319,7 +340,6 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
         const char *string)
 {
     const char *modes[] = {
-        [WINDOW_UNSPECIFIED] = "unspecified",
         [WINDOW_TILING] = "tiling",
         [WINDOW_FLOATING] = "floating",
         [WINDOW_FULLSCREEN] = "fullscreen",
@@ -341,7 +361,7 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
 
     if (strcmp(modes[mode], context->string) != 0) {
         emit_error(context, "invalid mode constant, choose one of: "
-                "unspecified, tiling, floating, fullscreen");
+                "tiling, floating, fullscreen");
     }
 
     return mode;
@@ -526,16 +546,21 @@ static void parse_action_value(struct toml_parse_context *context,
     *value = resolve_action_value(context, context->string);
 }
 
-static void parse_wm_gaps(struct toml_parse_context *context)
+static void parse_wm_tiling_layout(struct toml_parse_context *context)
+{
+    parse_layout(context, &context->wm.tiling.layout);
+}
+
+static void parse_wm_tiling_gaps(struct toml_parse_context *context)
 {
     int *gaps;
     int character;
     unsigned index;
 
     if (context->string[0] == 'i') {
-        gaps = context->wm.gaps.inner;
+        gaps = context->wm.tiling.gaps.inner;
     } else {
-        gaps = context->wm.gaps.outer;
+        gaps = context->wm.tiling.gaps.outer;
     }
 
     /* read the first character of the array '[' or a digit indicating the gaps
@@ -696,7 +721,7 @@ static void parse_wm_window_name(struct toml_parse_context *context)
     }
 
     read_any_string(context);
-    free(context->wm.window[context->wm.window_length - 1].monitor);
+    free(context->wm.window[context->wm.window_length - 1].name);
     context->wm.window[context->wm.window_length - 1].name =
         xstrdup(context->string);
 }
