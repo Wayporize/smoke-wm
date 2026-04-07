@@ -1,4 +1,7 @@
+#include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 /**
  * This file handles the management of configuration objects and related parts
@@ -64,9 +67,79 @@ void clear_configuration(struct wm *wm)
     free(wm->startup);
 }
 
+/* get access to the user home directory */
+extern char *user_home;
+
+/* Check if given file exists and if it can be read. */
+static bool is_readable(const char *path)
+{
+    if (access(path, R_OK) != 0) {
+        if (errno != ENOENT) {
+            /* the file exists but can not be read */
+            printf("can not open %s: %s\n", path, strerror(errno));
+        }
+        return false;
+    }
+    return true;
+}
+
 /* Get the path of the configuration to use on startup. */
 char *get_configuration_path(void)
 {
-    /* TODO: */
-    return NULL;
+    const char *xdg_config_home, *xdg_config_dirs;
+    char *path = NULL;
+    const char *colon;
+    int length;
+
+    /* search for the configuration file smoke-wm/config.toml within these
+     * directories (ordered by preference):
+     * XDG_CONFIG_HOME:XDG_CONFIG_DIRS:~/.config:/etc/xdg
+     */
+
+    xdg_config_home = getenv("XDG_CONFIG_HOME");
+    if (xdg_config_home != NULL && xdg_config_home[0] != '\0') {
+        path = xasprintf("%s/smoke-wm/config.toml", xdg_config_home);
+        if (!is_readable(path)) {
+            free(path);
+            path = NULL;
+        }
+    }
+
+    if (path == NULL) {
+        xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
+        if (xdg_config_dirs != NULL && xdg_config_dirs[0] != '\0') {
+            do {
+                colon = strchr(xdg_config_dirs, ':');
+                if (colon != NULL) {
+                    length = colon - xdg_config_dirs;
+                } else {
+                    length = strlen(xdg_config_dirs);
+                }
+
+                path = xasprintf("%.*s/smoke-wm/config.toml",
+                        length, xdg_config_dirs);
+                if (is_readable(path)) {
+                    break;
+                }
+                free(path);
+                path = NULL;
+
+                xdg_config_dirs = colon + 1;
+            } while (colon != NULL);
+        }
+    }
+
+    if (path == NULL) {
+        path = xasprintf("%s/.config/smoke-wm/config.toml", user_home);
+        if (!is_readable(path)) {
+            free(path);
+            path = xstrdup("/etc/xdg/smoke-wm/config.toml");
+            if (!is_readable(path)) {
+                free(path);
+                path = NULL;
+            }
+        }
+    }
+
+    return path;
 }

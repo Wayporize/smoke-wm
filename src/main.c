@@ -81,19 +81,19 @@ int main(int argc, char **argv)
         user_home = xstrdup(home);
     }
 
-    printf("user home: %s\n",
-            user_home);
+    printf("user home: %s\n", user_home);
 
-    /* TODO: read configuration from the config directory or
-     * /usr/share/smoke-wm/config.toml if not present
-     */
+    /* get the configuration path and parse the configuration */
     path = get_configuration_path();
 
-    printf("configuration path: %s\n",
-            path);
+    printf("configuration path: %s\n", path);
 
     if (path != NULL) {
         parse_toml_configuration(path, &Configuration);
+        free(path);
+    } else {
+        Configuration = Configuration_default;
+        /* TODO: set default bindings */
     }
 
     return 0;
