@@ -86,6 +86,7 @@ static bool is_readable(const char *path)
 /* Get the path of the configuration to use on startup. */
 char *get_configuration_path(void)
 {
+    const char *const config = "smoke-wm/config.toml";
     const char *xdg_config_home, *xdg_config_dirs;
     char *path = NULL;
     const char *colon;
@@ -98,7 +99,7 @@ char *get_configuration_path(void)
 
     xdg_config_home = getenv("XDG_CONFIG_HOME");
     if (xdg_config_home != NULL && xdg_config_home[0] != '\0') {
-        path = xasprintf("%s/smoke-wm/config.toml", xdg_config_home);
+        path = xasprintf("%s/%s", xdg_config_home, config);
         if (!is_readable(path)) {
             free(path);
             path = NULL;
@@ -116,8 +117,8 @@ char *get_configuration_path(void)
                     length = strlen(xdg_config_dirs);
                 }
 
-                path = xasprintf("%.*s/smoke-wm/config.toml",
-                        length, xdg_config_dirs);
+                path = xasprintf("%.*s/%s",
+                        length, xdg_config_dirs, config);
                 if (is_readable(path)) {
                     break;
                 }
@@ -130,10 +131,10 @@ char *get_configuration_path(void)
     }
 
     if (path == NULL) {
-        path = xasprintf("%s/.config/smoke-wm/config.toml", user_home);
+        path = xasprintf("%s/.config/%s", user_home, config);
         if (!is_readable(path)) {
             free(path);
-            path = xstrdup("/etc/xdg/smoke-wm/config.toml");
+            path = xasprintf("/etc/xdg/%s", config);
             if (!is_readable(path)) {
                 free(path);
                 path = NULL;
