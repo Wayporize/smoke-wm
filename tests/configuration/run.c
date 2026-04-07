@@ -4,6 +4,9 @@
 #include "configuration.h"
 #include "toml.h"
 
+/* define this because the linker needs it */
+char *user_home;
+
 static void print_color(const char *prefix, xcb_render_color_t *color)
 {
     printf("%s.red = 0x%04x\n", prefix, color->red);

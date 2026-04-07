@@ -2,6 +2,9 @@
 
 #include "toml.h"
 
+/* define this because the linker needs it */
+char *user_home;
+
 int main(int argc, char **argv)
 {
     struct wm wm;
