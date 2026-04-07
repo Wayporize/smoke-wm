@@ -1,8 +1,10 @@
 #!/bin/bash
 
+set -e
+
 run=./build/smoke-wm
 
-make "$run" || exit
+make "$run"
 
 check_configuration_path() {
     while read -r line ; do
