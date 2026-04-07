@@ -161,7 +161,10 @@ extern struct wm {
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm);
 
-/* Get the path of the configuration to use on startup. */
+/* Get the path of the configuration to use on startup.
+ *
+ * @return NULL if there is no configuration file.
+ */
 char *get_configuration_path(void);
 
 #endif
