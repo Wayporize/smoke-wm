@@ -136,7 +136,7 @@ extern struct wm {
         /* if button presses pass through to the underlying window */
         bool is_transparent;
         /* the modifiers needed in addition to the key/button */
-        uint16_t modifiers;
+        xkb_mod_mask_t modifiers;
         /* the key symbol */
         xkb_keysym_t key_symbol;
         /* the key code (usually specific key on the keyboard) */

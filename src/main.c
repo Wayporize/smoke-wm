@@ -10,6 +10,7 @@
 
 #include "configuration.h"
 #include "toml.h"
+#include "x11.h"
 
 /* name of the executable argument used when running the program */
 char *program_name;
@@ -87,6 +88,8 @@ int main(int argc, char **argv)
     path = get_configuration_path();
 
     printf("configuration path: %s\n", path);
+
+    open_display();
 
     if (path != NULL) {
         parse_toml_configuration(path, &Configuration);
