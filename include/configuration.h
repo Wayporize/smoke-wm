@@ -9,6 +9,8 @@
 
 #include <utility/list.h>
 
+#include "action.h"
+
 /* TODO: put me somewhere else */
 enum tiling_layout {
     TILE_UNSPECIFIED,
@@ -32,14 +34,6 @@ enum border_decoration {
     BORDER_NONE,
     BORDER_SIMPLE,
     BORDER_FULL
-};
-
-enum action_type {
-    ACTION_NONE
-};
-
-union action_value {
-    int value;
 };
 
 /* the globally accessible configuration object */
@@ -160,6 +154,12 @@ extern struct wm {
 
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm);
+
+/* Set the bindings of a configuration as global bindings.
+ *
+ * Use `clear_bindings()` to remove them all again.
+ */
+void set_configuration_bindings(struct wm *wm);
 
 /* Get the path of the configuration to use on startup.
  *

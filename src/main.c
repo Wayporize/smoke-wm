@@ -93,11 +93,15 @@ int main(int argc, char **argv)
 
     if (path != NULL) {
         parse_toml_configuration(path, &Configuration);
+        set_configuration_bindings(&Configuration);
         free(path);
     } else {
         Configuration = Configuration_default;
         /* TODO: set default bindings */
     }
+
+    /* receive all events by the server and handle them */
+    handle_server_events();
 
     return 0;
 }

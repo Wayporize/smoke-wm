@@ -3,6 +3,11 @@
 #include <setjmp.h>
 #include <stdio.h>
 
+/**
+ * TOML parser without validity checking for duplicate tables.
+ * Float/Date/Time is also not supported.
+ */
+
 #include "configuration.h"
 
 /* context needed to parse a file */
