@@ -150,12 +150,15 @@ while read -r line ; do
         fi
         new_hard_bindings+=("$b")
     done
+    hard_bindings=("${new_hard_bindings[@]}")
 
-    hard_bindings=("${hard_bindings[@]}")
 done < <(XDG_CONFIG_HOME="$temp" "$run")
 
 # If there is a bug in the test or not enough bindings printed
-if [ "${#hard_bindings[@]}" -eq 0 ] ; then
-    echo "got left over hard bindings"
+if ! [ "${#hard_bindings[@]}" -eq 0 ] ; then
+    echo "got left over hard bindings:"
+    for b in "${hard_bindings[@]}" ; do
+        echo "$b"
+    done
     exit 1
 fi
