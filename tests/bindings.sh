@@ -45,6 +45,25 @@ bindings=(
     "P Lock+Shift+Mod4 KP_Multiply"
 )
 
+# Translate an X core modifier to an integer mask
+modifier_to_integer() {
+    case "$1" in
+    [Ss]hift) integer=1 ;;
+    [Ll]ock) integer=0 ;;
+    [Cc]ontrol) integer=4 ;;
+    [Mm]od1) integer=8 ;;
+    [Mm]od2) integer=16 ;;
+    [Mm]od3) integer=32 ;;
+    [Mm]od4) integer=64 ;;
+    [Mm]od5) integer=128 ;;
+    esac
+    echo -n "$integer"
+}
+
+# Compute the modifiers to ignore
+result="$(xmodmap -pm | grep -E 'Num_Lock|Scroll_Lock')"
+ignore_modifiers_mask="$(modifier_to_integer "${result%% *}")"
+
 # Entries with space separated entries themselves
 # [i][0] := Release flag
 # [i][1] := Modifiers as integer
@@ -71,18 +90,12 @@ for b in "${bindings[@]}" ; do
     for m in ${fields[1]} ; do
         case $m in
         None) break ;;
-        Shift) integer=0 ;;
-        Lock) continue ;;
-        Control) integer=2 ;;
-        Mod1) integer=3 ;;
-        Mod2) integer=4 ;;
-        Mod3) integer=5 ;;
-        Mod4) integer=6 ;;
-        Mod5) integer=7 ;;
+        *) modifiers=$((modifiers | $(modifier_to_integer "$m")))
         esac
-        modifiers=$((modifiers | (1 << integer)))
     done
     IFS="$old_IFS"
+
+    modifiers=$((modifiers & ~ignore_modifiers_mask))
 
     # This is how we interpret the xmodmap output:
     # [0] = "keycode"

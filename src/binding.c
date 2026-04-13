@@ -81,10 +81,16 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code)
 {
     xkb_mod_mask_t saved_bits;
+    struct xkb_state *state;
+    unsigned ignore_modifiers = 0;
 
-    modifiers &= ~XCB_MOD_MASK_LOCK;
-    /* TODO: search modifier mapping for numlock/scrolllock */
-    //modifiers &= ~ignore_modifiers;
+    /* ignore NumLock and ScrollLock modifiers */
+    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
+            XKB_VMOD_NAME_NUM);
+    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
+            XKB_VMOD_NAME_SCROLL);
+    modifiers &= ~ignore_modifiers;
+
     /* get rid of the LOCK mask by shifting above bits into it */
     saved_bits = (modifiers & (XCB_MOD_MASK_LOCK - 1));
     modifiers >>= 1;
