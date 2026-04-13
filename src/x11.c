@@ -201,38 +201,35 @@ void open_display(void)
 /* Handle an event by the xkb extension. */
 static void handle_xkb_event(xcb_generic_event_t *generic_event)
 {
-    /* ignore devices not concerning the core keyboard */
-    if (((xcb_xkb_new_keyboard_notify_event_t*) generic_event)->deviceID !=
-            display.keyboard_device_id) {
-        return;
-    }
+    xcb_xkb_state_notify_event_t *event;
+    enum xkb_state_component change;
 
-    switch (((xcb_xkb_new_keyboard_notify_event_t*) generic_event)->xkbType) {
-    case XCB_XKB_NEW_KEYBOARD_NOTIFY:
-    case XCB_XKB_MAP_NOTIFY:
-        refresh_keyboard_mapping();
-        clear_bindings();
-        set_configuration_bindings(&Configuration);
-        break;
-
-    case XCB_XKB_STATE_NOTIFY: {
-        xcb_xkb_state_notify_event_t *event;
-        enum xkb_state_component change;
-
-        event = (xcb_xkb_state_notify_event_t*) generic_event;
-        /* update the xkb keyboard state */
-        change = xkb_state_update_mask(display.keyboard_state,
-                event->baseMods, event->latchedMods, event->lockedMods,
-                event->baseGroup, event->latchedGroup, event->lockedGroup);
-        if ((change & XKB_STATE_LAYOUT_EFFECTIVE)) {
-            /* layout has changed, simply re-create the bindings with the new
-             * layout in the keyboard state
-             */
+    event = (xcb_xkb_state_notify_event_t*) generic_event;
+    if (event->deviceID == display.keyboard_device_id) {
+        switch (event->xkbType) {
+        case XCB_XKB_NEW_KEYBOARD_NOTIFY:
+        case XCB_XKB_MAP_NOTIFY:
+            printf("xkb: mapping changed\n");
+            refresh_keyboard_mapping();
             clear_bindings();
             set_configuration_bindings(&Configuration);
+            break;
+
+        case XCB_XKB_STATE_NOTIFY:
+            /* update the xkb keyboard state */
+            change = xkb_state_update_mask(display.keyboard_state,
+                    event->baseMods, event->latchedMods, event->lockedMods,
+                    event->baseGroup, event->latchedGroup, event->lockedGroup);
+            if ((change & XKB_STATE_LAYOUT_EFFECTIVE)) {
+                printf("xkb: layout changed\n");
+                /* layout has changed, simply re-create the bindings with the new
+                 * layout in the keyboard state
+                 */
+                clear_bindings();
+                set_configuration_bindings(&Configuration);
+            }
+            break;
         }
-        break;
-    }
     }
 }
 

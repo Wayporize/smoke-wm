@@ -13,7 +13,3 @@ build/tests/toml/run: tests/toml/run.c $(TOML_SOURCES)
 build/tests/configuration/run: tests/configuration/run.c $(TOML_SOURCES)
 	mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) -Iinclude $^ -o $@ $(C_LIBS)
-
-build/tests/bindings/run: tests/bindings/run.c $(TOML_SOURCES)
-	mkdir -p $(dir $@)
-	$(CC) $(C_FLAGS) -Iinclude $^ -o $@ $(C_LIBS)
