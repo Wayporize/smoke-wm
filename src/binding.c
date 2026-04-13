@@ -81,7 +81,6 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code)
 {
     xkb_mod_mask_t saved_bits;
-    struct xkb_state *state;
     unsigned ignore_modifiers = 0;
 
     /* ignore NumLock and ScrollLock modifiers */
@@ -128,6 +127,7 @@ void set_key_binding(bool is_release, xkb_mod_mask_t modifiers,
     }
 }
 
+/* struct to pass into `xkb_keymap_key_for_each()` for `set_bind_iterator()` */
 struct key_iterator_context {
     /* current keyboard state to use */
     struct xkb_state *state;
@@ -166,7 +166,6 @@ static void set_bind_iterator(struct xkb_keymap *keymap, xkb_keycode_t key_code,
             }
         }
     }
-
 }
 
 /* Set a key binding using a key symbol. */

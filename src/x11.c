@@ -34,16 +34,124 @@ static void refresh_keyboard_mapping(void)
     }
 }
 
+/* Initialize the Xkb extension and xkbcommon library. */
+static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
+        xcb_xkb_get_device_info_cookie_t device_cookie,
+        xcb_xkb_per_client_flags_cookie_t client_cookie)
+{
+    const xcb_query_extension_reply_t *extension_reply;
+    xcb_generic_error_t *error;
+    xcb_xkb_use_extension_reply_t *reply;
+    xcb_xkb_get_device_info_reply_t *device_reply;
+    xcb_xkb_select_events_details_t details;
+    const uint16_t required_events = (XCB_XKB_EVENT_TYPE_STATE_NOTIFY |
+            XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY |
+            XCB_XKB_EVENT_TYPE_MAP_NOTIFY);
+    const uint16_t required_nkn_details = XCB_XKB_NKN_DETAIL_KEYCODES;
+    const uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES |
+             XCB_XKB_MAP_PART_KEY_SYMS |
+             XCB_XKB_MAP_PART_MODIFIER_MAP |
+             XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS |
+             XCB_XKB_MAP_PART_KEY_ACTIONS |
+             XCB_XKB_MAP_PART_VIRTUAL_MODS |
+             XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
+    const uint16_t required_state_details = (XCB_XKB_STATE_PART_MODIFIER_BASE |
+             XCB_XKB_STATE_PART_MODIFIER_LATCH |
+             XCB_XKB_STATE_PART_MODIFIER_LOCK |
+             XCB_XKB_STATE_PART_GROUP_BASE |
+             XCB_XKB_STATE_PART_GROUP_LATCH |
+             XCB_XKB_STATE_PART_GROUP_LOCK);
+    xcb_xkb_per_client_flags_reply_t *client_reply;
+
+    extension_reply = xcb_get_extension_data(display.xcb, &xcb_xkb_id);
+    if (extension_reply == NULL) {
+        printf("failed to query xcb extension data for xkb\n");
+        exit(1);
+    } else if (!extension_reply->present) {
+        printf("xkb is not available on the server\n");
+        exit(1);
+    }
+
+    display.xkb_base_event = extension_reply->first_event;
+    display.xkb_base_error = extension_reply->first_error;
+
+    reply = xcb_xkb_use_extension_reply(display.xcb, cookie, &error);
+    if (reply == NULL) {
+        printf("using xcb extension xkb failed: error code %d\n",
+                error->error_code);
+        free(error);
+        exit(1);
+    } else if (!reply->supported) {
+        printf("server does not support xkb version %d.%d\n",
+                XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
+        exit(1);
+    }
+
+    free(reply);
+
+    display.xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (display.xkb == NULL) {
+        printf("could not create xkb context\n");
+        exit(1);
+    }
+
+    /* get the device id of the core keyboard */
+    device_reply = xcb_xkb_get_device_info_reply(display.xcb, device_cookie,
+            NULL);
+    if (device_reply == NULL) {
+        printf("could not get xkb device info\n");
+        exit(1);
+    }
+    display.keyboard_device_id = device_reply->deviceID;
+    free(device_reply);
+
+    /* This duplication of values is because the first says which bits to affect
+     * and the second one which value these bits should have.
+     *
+     * For example, the keyboard details we want to set are 0b001.
+     * So we affect 0b001 and then set the values using 0b001 again.
+     */
+    ZERO(&details, 1);
+    details.affectNewKeyboard = required_nkn_details;
+    details.newKeyboardDetails = required_nkn_details;
+    details.affectState = required_state_details;
+    details.stateDetails = required_state_details;
+    xcb_xkb_select_events_aux(display.xcb, display.keyboard_device_id,
+            required_events,
+            /* these are for enabling/disabling whole events, we use
+             * details so we do not need them
+             */
+            0, 0,
+            /* these are split off from `details`, not sure why they designed it
+             * this way
+             */
+            required_map_parts, required_map_parts,
+            &details);
+
+    client_reply = xcb_xkb_per_client_flags_reply(display.xcb, client_cookie,
+            &error);
+    if (client_reply == NULL) {
+        printf("could not set xkb per client flags\n");
+        exit(1);
+    } else {
+        if (!(client_reply->value & XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT)) {
+            printf("could not set per client flags (X server can not comply)\n");
+            exit(1);
+        }
+        free(client_reply);
+    }
+
+    /* do an initial refresh */
+    refresh_keyboard_mapping();
+}
+
 /* Open the X11 connection and initialize Xkb. */
 void open_display(void)
 {
     int connection_error;
     xcb_xkb_use_extension_cookie_t xkb_cookie;
-    xcb_xkb_get_device_info_cookie_t device_cookie;
-    const xcb_query_extension_reply_t *extension_reply;
-    xcb_xkb_use_extension_reply_t *xkb_reply;
-    xcb_xkb_get_device_info_reply_t *device_reply;
-    xcb_generic_error_t *error;
+    xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
+    xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
 
     /* connect to the X server */
     display.xcb = xcb_connect(NULL, NULL);
@@ -74,109 +182,38 @@ void open_display(void)
     xkb_cookie = xcb_xkb_use_extension(display.xcb,
             XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
-    device_cookie = xcb_xkb_get_device_info(display.xcb,
+    xkb_device_cookie = xcb_xkb_get_device_info(display.xcb,
             XCB_XKB_ID_USE_CORE_KBD, 0, 0, 0, 0, 0, 0);
 
-    extension_reply = xcb_get_extension_data(display.xcb, &xcb_xkb_id);
-    if (extension_reply == NULL) {
-        printf("failed to query xcb extension data for xkb\n");
-        exit(1);
-    } else if (!extension_reply->present) {
-        printf("xkb is not available on the server\n");
-        exit(1);
-    }
+    /* make it so when a key is held down and auto repeating, we can detect this
+     * case instead of the core behaviour that just sends KeyPress/KeyRelease
+     * pairs
+     */
+    xkb_client_cookie = xcb_xkb_per_client_flags(display.xcb,
+            XCB_XKB_ID_USE_CORE_KBD,
+            XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
+            XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
+            0, 0, 0);
 
-    display.xkb_base_event = extension_reply->first_event;
-    display.xkb_base_error = extension_reply->first_error;
-
-    xkb_reply = xcb_xkb_use_extension_reply(display.xcb, xkb_cookie, &error);
-    if (xkb_reply == NULL) {
-        printf("using xcb extension xkb failed: error code %d\n",
-                error->error_code);
-        free(error);
-        exit(1);
-    } else if (!xkb_reply->supported) {
-        printf("server does not support xkb version %d.%d\n",
-                XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
-        exit(1);
-    }
-
-    free(xkb_reply);
-
-    display.xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (display.xkb == NULL) {
-        printf("could not create xkb context\n");
-        exit(1);
-    }
-
-    device_reply = xcb_xkb_get_device_info_reply(display.xcb, device_cookie,
-            NULL);
-    if (device_reply == NULL) {
-        printf("could not get xkb device info\n");
-        exit(1);
-    }
-    display.keyboard_device_id = device_reply->deviceID;
-    free(device_reply);
-
-    /* select for state and map notify events */
-    xcb_xkb_select_events(display.xcb, display.keyboard_device_id,
-                                       XCB_XKB_EVENT_TYPE_STATE_NOTIFY |
-                                       XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY |
-                                       /* TODO: I do not know how to trigger
-                                        * this event and what it does
-                                        */
-                                       XCB_XKB_EVENT_TYPE_MAP_NOTIFY,
-                                       /* TODO: Is it apparent that I have no
-                                        * clue how to use these?
-                                        */
-                                       0, ~0, ~0, ~0, NULL);
-    /* do an initial refresh */
-    refresh_keyboard_mapping();
+    initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
 }
 
 /* Handle an event by the xkb extension. */
 static void handle_xkb_event(xcb_generic_event_t *generic_event)
 {
-    switch (((xcb_xkb_new_keyboard_notify_event_t*) generic_event)->xkbType) {
-    case XCB_XKB_NEW_KEYBOARD_NOTIFY: {
-        xcb_xkb_new_keyboard_notify_event_t *event;
-
-        event = (xcb_xkb_new_keyboard_notify_event_t*) generic_event;
-        /* we also get new keyboard notifications for other keyboards but we
-         * only care about the X core keyboard
-         */
-        if (event->oldDeviceID == display.keyboard_device_id) {
-            /* TODO: does this ever change? */
-            if ((event->changed & XCB_XKB_NKN_DETAIL_DEVICE_ID)) {
-                display.keyboard_device_id = event->deviceID;
-            }
-
-            if ((event->changed & XCB_XKB_NKN_DETAIL_KEYCODES)) {
-                refresh_keyboard_mapping();
-                clear_bindings();
-                set_configuration_bindings(&Configuration);
-            }
-
-            /* the geometry can also change (XCB_XKB_NKN_DETAIL_GEOMETRY) but
-             * this is not important to us
-             */
-        }
-        break;
+    /* ignore devices not concerning the core keyboard */
+    if (((xcb_xkb_new_keyboard_notify_event_t*) generic_event)->deviceID !=
+            display.keyboard_device_id) {
+        return;
     }
 
-    case XCB_XKB_MAP_NOTIFY: {
-        xcb_xkb_map_notify_event_t *event;
-
-        event = (xcb_xkb_map_notify_event_t*) generic_event;
-        (void) event /* TODO: */;
-        /* TODO: when is a refresh needed?
-         * My guess is XCB_XKB_MAP_PART_* constants should be used
-         */
+    switch (((xcb_xkb_new_keyboard_notify_event_t*) generic_event)->xkbType) {
+    case XCB_XKB_NEW_KEYBOARD_NOTIFY:
+    case XCB_XKB_MAP_NOTIFY:
         refresh_keyboard_mapping();
         clear_bindings();
         set_configuration_bindings(&Configuration);
         break;
-    }
 
     case XCB_XKB_STATE_NOTIFY: {
         xcb_xkb_state_notify_event_t *event;
