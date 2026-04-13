@@ -27,6 +27,32 @@ struct binding {
  */
 static struct binding key_bindings[256 - 8][256 >> 1];
 
+#ifdef DEBUG
+
+/* Dump all bindings created to stdout. */
+void debug_dump_bindings(void)
+{
+    struct binding *binding;
+
+    for (unsigned kc = 0; kc < SIZE(key_bindings); kc++) {
+        for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
+            binding = &key_bindings[kc][m];
+            if (binding->press_actions != NULL) {
+                printf("P %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK,
+                        kc + 8);
+            }
+            if (binding->release_actions != NULL) {
+                printf("R %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK,
+                        kc + 8);
+            }
+        }
+    }
+}
+
+#endif
+
 /* Clear all bindings. */
 void clear_bindings(void)
 {
@@ -54,15 +80,15 @@ void clear_bindings(void)
 static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code)
 {
-    xkb_mod_mask_t shift;
+    xkb_mod_mask_t saved_bits;
 
     modifiers &= ~XCB_MOD_MASK_LOCK;
     /* TODO: search modifier mapping for numlock/scrolllock */
     //modifiers &= ~ignore_modifiers;
-    /* get rid of the LOCK mask by shift above bits into it */
-    shift = (modifiers & XCB_MOD_MASK_SHIFT);
+    /* get rid of the LOCK mask by shifting above bits into it */
+    saved_bits = (modifiers & (XCB_MOD_MASK_LOCK - 1));
     modifiers >>= 1;
-    modifiers |= shift;
+    modifiers |= saved_bits;
     modifiers &= 127;
 
     if (key_code < 8 || key_code >= 256) {
@@ -74,7 +100,7 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
     return &key_bindings[key_code][modifiers];
 }
 
-/* Set a key binding. */
+/* Associate a key (with modifiers) on the keyboard with an action. */
 void set_key_binding(bool is_release, xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code, struct action action)
 {

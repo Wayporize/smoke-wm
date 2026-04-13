@@ -10,10 +10,23 @@
 
 #include "action.h"
 
+#ifdef DEBUG
+
+/* Dump all bindings created to stdout. */
+void debug_dump_bindings(void);
+
+#endif
+
 /* Clear all bindings. */
 void clear_bindings(void);
 
-/* Set a key binding. */
+/* Associate a key (with modifiers) on the keyboard with an action.
+ *
+ * If the key binding already exists, the action is appended to the already
+ * existing actions.
+ *
+ * @is_release controls whether to trigger the binding on press or release.
+ */
 void set_key_binding(bool is_release, xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code, struct action action);
 
