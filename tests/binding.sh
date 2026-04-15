@@ -48,7 +48,7 @@ bindings=(
     "BP Shift+Super ScrollUp"
 )
 
-# Translate an X core modifier to an integer mask
+# Translate a modifier constant to an integer mask
 modifier_to_integer() {
     case "$1" in
     [Ss]hift) integer=1 ;;
@@ -63,7 +63,7 @@ modifier_to_integer() {
         # Use xmodmap, it might have the right key like Alt_L associated to a
         # modifier
         if modifier="$(xmodmap | grep "$1")" ; then
-            # The output is for example "mod4      ...", so trim the all after
+            # The output is for example "mod4      ...", so trim the after
             # "mod4"
             modifier_to_integer "${modifier%% *}"
             return

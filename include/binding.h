@@ -35,7 +35,7 @@ void append_key_binding(bool is_release, xkb_mod_mask_t modifiers,
 
 /* Set a key binding using a key symbol.
  *
- * This is a series of calls to `set_key_binding()` for each key that has the
+ * This is a series of calls to `append_key_binding()` for each key that has the
  * given key symbol.
  */
 void append_key_symbol_binding(bool is_release, xkb_mod_mask_t modifiers,
@@ -59,8 +59,6 @@ void append_button_binding(bool is_release, bool is_transparent,
 
 /* Get a list of actions associated to a button.
  *
- * @action_length[out] holds the number of actions.  This values is unchanged if
- *                     `NULL` is returned.
  * @is_transparent[out] stores the `is_transparent` flag.
  *
  * @return a list of actions terminated by `.type = ACTION_NONE` or `NULL` if

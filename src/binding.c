@@ -17,7 +17,7 @@
 
 /* a binding consists of a list of actions for pressing and releasing */
 struct binding {
-    /* one of the above `BINDING_*` flags */
+    /* an OR combination of the above `BINDING_*` flags */
     unsigned flags;
     /* the actions to execute when the button/key is pressed (terminated by
      * `ACTION_NULL`)
@@ -39,6 +39,30 @@ static struct binding key_bindings[256 - 8][256 >> 1];
  */
 static struct binding (*button_bindings)[256 >> 1];
 static unsigned button_bindings_length;
+
+/* Remove all ignored modifiers and the LOCK mask and shift the bits into the
+ * lock mask.
+ */
+static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
+{
+    xkb_mod_mask_t saved_bits;
+    unsigned ignore_modifiers = 0;
+
+    /* ignore NumLock and ScrollLock modifiers */
+    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
+            XKB_VMOD_NAME_NUM);
+    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
+            XKB_VMOD_NAME_SCROLL);
+    modifiers &= ~ignore_modifiers;
+
+    /* get rid of the LOCK mask by shifting above bits into it */
+    saved_bits = (modifiers & (XCB_MOD_MASK_LOCK - 1));
+    modifiers >>= 1;
+    modifiers |= saved_bits;
+    modifiers &= 127;
+
+    return modifiers;
+}
 
 #ifdef DEBUG
 
@@ -106,30 +130,6 @@ void clear_bindings(void)
             binding->release_actions = NULL;
         }
     }
-}
-
-/* Remove all ignored modifiers and the LOCK mask and shift the bits into the
- * lock mask.
- */
-static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
-{
-    xkb_mod_mask_t saved_bits;
-    unsigned ignore_modifiers = 0;
-
-    /* ignore NumLock and ScrollLock modifiers */
-    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
-            XKB_VMOD_NAME_NUM);
-    ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
-            XKB_VMOD_NAME_SCROLL);
-    modifiers &= ~ignore_modifiers;
-
-    /* get rid of the LOCK mask by shifting above bits into it */
-    saved_bits = (modifiers & (XCB_MOD_MASK_LOCK - 1));
-    modifiers >>= 1;
-    modifiers |= saved_bits;
-    modifiers &= 127;
-
-    return modifiers;
 }
 
 /* Append an action to a binding.
