@@ -1,6 +1,7 @@
 #include <locale.h>
 
 #include "toml.h"
+#include "x11.h"
 
 /* define this because the linker needs it */
 char *user_home;
@@ -12,6 +13,9 @@ int main(int argc, char **argv)
 
     /* make wctomb() work */
     (void) setlocale(LC_ALL, "");
+
+    /* make bindings work */
+    open_display();
 
     status = parse_toml_configuration(argv[1], &wm);
     if (status == 0) {

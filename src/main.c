@@ -8,8 +8,10 @@
 #include <sys/types.h>
 #include <utility/utility.h>
 
+#include "binding.h"
 #include "configuration.h"
 #include "toml.h"
+#include "x11.h"
 
 /* name of the executable argument used when running the program */
 char *program_name;
@@ -81,20 +83,38 @@ int main(int argc, char **argv)
         user_home = xstrdup(home);
     }
 
+    /* associated to test tests/home.sh */
     printf("user home: %s\n", user_home);
 
     /* get the configuration path and parse the configuration */
     path = get_configuration_path();
 
+    /* associated to test tests/configuration-path.sh */
     printf("configuration path: %s\n", path);
+
+    open_display();
 
     if (path != NULL) {
         parse_toml_configuration(path, &Configuration);
+        set_configuration_bindings(&Configuration);
         free(path);
     } else {
         Configuration = Configuration_default;
         /* TODO: set default bindings */
     }
+
+#ifdef DEBUG
+    /* associated to test tests/bindings.sh */
+    printf("start of dumping bindings\n");
+    debug_dump_bindings();
+    printf("end of dumping bindings\n");
+
+    /* if test cases are running, we must flush our printed data */
+    fflush(stdout);
+#endif
+
+    /* receive all events by the server and handle them */
+    handle_server_events();
 
     return 0;
 }

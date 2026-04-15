@@ -3,12 +3,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <xkbcommon/xkbcommon.h>
+
 /**
  * This file handles the management of configuration objects and related parts
  * of the configuration like the configuration directory.
  */
 
+#include "binding.h"
 #include "configuration.h"
+#include "x11.h"
 
 /* the globally accessible configuration object */
 struct wm Configuration;
@@ -65,6 +69,35 @@ void clear_configuration(struct wm *wm)
         /* wm->startup[i].value TODO: clear action value */
     }
     free(wm->startup);
+}
+
+/* Set the bindings of a configuration as global bindings. */
+void set_configuration_bindings(struct wm *wm)
+{
+    for (size_t i = 0; i < wm->binding_length; i++) {
+        struct action action;
+
+        action.type = wm->binding[i].action;
+        action.value = wm->binding[i].value;
+        if (wm->binding[i].button != 0) {
+            append_button_binding(wm->binding[i].is_release,
+                    wm->binding[i].is_transparent,
+                    wm->binding[i].modifiers, wm->binding[i].button - 1,
+                    action);
+        }
+
+        if (wm->binding[i].key_code != XKB_KEY_NoSymbol) {
+            append_key_binding(wm->binding[i].is_release,
+                    wm->binding[i].modifiers, wm->binding[i].key_code,
+                    action);
+        }
+
+        if (wm->binding[i].key_symbol != XKB_KEY_NoSymbol) {
+            append_key_symbol_binding(wm->binding[i].is_release,
+                    wm->binding[i].modifiers, wm->binding[i].key_symbol,
+                    action);
+        }
+    }
 }
 
 /* get access to the user home directory */

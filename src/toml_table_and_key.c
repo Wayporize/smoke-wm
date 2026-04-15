@@ -1,7 +1,5 @@
 #include <ctype.h>
 #include <limits.h>
-#include <xcb/xproto.h>
-#include <xkbcommon/xkbcommon.h>
 
 /**
  * This handles all the parsing of tables and keys.  All tables and their
@@ -13,6 +11,7 @@
  */
 
 #include "toml.h"
+#include "x11.h"
 
 /* append functions for table arrays */
 static void append_wm_monitor(struct toml_parse_context *context);
@@ -27,8 +26,6 @@ static void parse_border_radius(struct toml_parse_context *context, struct wm_bo
 static void parse_border_color(struct toml_parse_context *context, struct wm_border *border);
 static void parse_layout(struct toml_parse_context *context, enum tiling_layout *layout);
 static enum window_mode resolve_window_mode(struct toml_parse_context *context, const char *string);
-/* Try to resolve the given string to a modifier constant. */
-static uint16_t resolve_modifier(struct toml_parse_context *context, const char *modifier);
 /* Translate the given string to a button index. */
 static xcb_button_t resolve_button(struct toml_parse_context *context, const char *name);
 static enum action_type resolve_action(struct toml_parse_context *context, const char *string);
@@ -367,54 +364,6 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
     return mode;
 }
 
-/* Try to resolve the given string within parser to a modifier constant. */
-static uint16_t resolve_modifier(struct toml_parse_context *context,
-        const char *modifier)
-{
-    /* string to modifier translation */
-    static const struct {
-        const char *string;
-        uint16_t modifier;
-    } string_to_modifier[] = {
-        { "None", 0 },
-        { "Shift", XCB_MOD_MASK_SHIFT },
-        { "Lock", XCB_MOD_MASK_LOCK },
-        { "Control", XCB_MOD_MASK_CONTROL },
-        { "Mod1", XCB_MOD_MASK_1 },
-        { "Mod2", XCB_MOD_MASK_2 },
-        { "Mod3", XCB_MOD_MASK_3 },
-        { "Mod4", XCB_MOD_MASK_4 },
-        { "Mod5", XCB_MOD_MASK_5 },
-    };
-
-    unsigned index;
-
-    if (strlen(modifier) < 4) {
-        emit_error(context, "invalid modifier");
-    }
-
-    /* the fourth character is unique among all constants */
-    switch (modifier[3]) {
-    case 'e': index = 0; break;
-    case 'f': index = 1; break;
-    case 'k': index = 2; break;
-    case 't': index = 3; break;
-    case '1': index = 4; break;
-    case '2': index = 5; break;
-    case '3': index = 6; break;
-    case '4': index = 7; break;
-    case '5': index = 8; break;
-    default:
-        emit_error(context, "invalid modifier");
-    }
-
-    if (strcmp(string_to_modifier[index].string, modifier) != 0) {
-        emit_error(context, "invalid modifier");
-    }
-
-    return string_to_modifier[index].modifier;
-}
-
 /* Translate the string within @parser to a button index.
  *
  * @return BUTTON_NONE when the string is not a button constant.
@@ -517,7 +466,7 @@ static enum action_type resolve_action(struct toml_parse_context *context,
         const char *string)
 {
     /* TODO: implement when actions are there */
-    return ACTION_NONE;
+    return ACTION_NULL;
 }
 
 static union action_value resolve_action_value(
@@ -891,7 +840,7 @@ static void parse_wm_binding_modifiers(struct toml_parse_context *context)
         if (plus != NULL) {
             plus[0] = '\0';
         }
-        modifiers |= resolve_modifier(context, name);
+        modifiers |= xkb_keymap_mod_get_mask(display.keymap, name);
         name = plus + 1;
     } while (plus != NULL);
 
@@ -984,7 +933,7 @@ static void parse_wm_bindings(struct toml_parse_context *context)
     key_name = context->string;
     while (plus = strchr(key_name, '+'), plus != NULL) {
         plus[0] = '\0';
-        binding.modifiers |= resolve_modifier(context, key_name);
+        binding.modifiers |= xkb_keymap_mod_get_mask(display.keymap, key_name);
         key_name = plus + 1;
     }
 

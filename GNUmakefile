@@ -2,7 +2,7 @@
 CC := cc
 
 # Packages
-PACKAGES := xcb xkbcommon
+PACKAGES := xcb xcb-xkb xkbcommon xkbcommon-x11
 
 # Compiler flags
 C_FLAGS := -std=c99 -D_XOPEN_SOURCE=700 -Iinclude \
