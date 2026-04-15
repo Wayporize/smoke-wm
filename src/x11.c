@@ -145,7 +145,7 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
     refresh_keyboard_mapping();
 }
 
-/* Open the X11 connection and initialize Xkb. */
+/* Open the X11 connection and initialize extensions. */
 void open_display(void)
 {
     int connection_error;

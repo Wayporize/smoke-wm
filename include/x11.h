@@ -30,7 +30,7 @@ void open_display(void);
 
 /* Handle incoming events on the X11 connection.
  *
- * This function blocks until the user exits normally.
+ * This function blocks until the user exits normally or an error occurs.
  */
 void handle_server_events(void);
 

@@ -5,31 +5,44 @@
 /**
  * Bindings are stored in an array that associates a key code/modifiers with a
  * list of press and release actions.
+ *
+ * The binding arrays are optimized for fast lookups.
  */
 
 #include "binding.h"
 #include "x11.h"
 
+/* if the binding should pass through to the underlying window */
+#define BINDING_TRANSPARENT 0x1
+
 /* a binding consists of a list of actions for pressing and releasing */
 struct binding {
-    /* number of actions in `press_actions` */
-    unsigned press_actions_length;
-    /* number of actions in `release_actions` */
-    unsigned release_actions_length;
-    /* the actions to execute when the button/key is pressed */
+    /* one of the above `BINDING_*` flags */
+    unsigned flags;
+    /* the actions to execute when the button/key is pressed (terminated by
+     * ACTION_NONE)
+     */
     struct action *press_actions;
-    /* the actions to execute when the button/key is released */
+    /* the actions to execute when the button/key is released (terminated by
+     * ACTION_NONE)
+     */
     struct action *release_actions;
 };
 
-/* key bindings, the first index is the key code, the other is the adjusted
- * modifiers (modifiers without lock mask)
+/* key bindings, the first index is the adjusted key code, the other is the
+ * adjusted modifiers (modifiers without lock mask)
  */
 static struct binding key_bindings[256 - 8][256 >> 1];
 
+/* Dynamic array of button bindings.  There is no compile time constant to tell
+ * us a maximum value.  The second index is the adjust modifier like above.
+ */
+static struct binding (*button_bindings)[256 >> 1];
+static unsigned button_bindings_length;
+
 #ifdef DEBUG
 
-/* Dump all bindings created to stdout. */
+/* Dump all bindings created to `stdout`. */
 void debug_dump_bindings(void)
 {
     struct binding *binding;
@@ -38,14 +51,26 @@ void debug_dump_bindings(void)
         for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
             if (binding->press_actions != NULL) {
-                printf("P %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK,
-                        kc + 8);
+                printf("KP %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, kc + 8);
             }
             if (binding->release_actions != NULL) {
-                printf("R %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK,
-                        kc + 8);
+                printf("KR %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, kc + 8);
+            }
+        }
+    }
+
+    for (unsigned b = 0; b < button_bindings_length; b++) {
+        for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
+            binding = &button_bindings[b][m];
+            if (binding->press_actions != NULL) {
+                printf("BP %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, b);
+            }
+            if (binding->release_actions != NULL) {
+                printf("BR %u %u\n",
+                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, b);
             }
         }
     }
@@ -58,16 +83,28 @@ void clear_bindings(void)
 {
     struct binding *binding;
 
-    for (unsigned i = 0; i < SIZE(key_bindings); i++) {
-        for (unsigned j = 0; j < SIZE(key_bindings[0]); j++) {
-            binding = &key_bindings[i][j];
+    for (unsigned kc = 0; kc < SIZE(key_bindings); kc++) {
+        for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
+            binding = &key_bindings[kc][m];
             if (binding->press_actions != NULL) {
-                binding->press_actions_length = 0;
                 free(binding->press_actions);
                 binding->press_actions = NULL;
             }
             if (binding->release_actions != NULL) {
-                binding->release_actions_length = 0;
+                free(binding->release_actions);
+                binding->release_actions = NULL;
+            }
+        }
+    }
+
+    for (unsigned b = 0; b < button_bindings_length; b++) {
+        for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
+            binding = &button_bindings[b][m];
+            if (binding->press_actions != NULL) {
+                free(binding->press_actions);
+                binding->press_actions = NULL;
+            }
+            if (binding->release_actions != NULL) {
                 free(binding->release_actions);
                 binding->release_actions = NULL;
             }
@@ -75,10 +112,10 @@ void clear_bindings(void)
     }
 }
 
-/* Get a pointer to the binding corresponding to given modifiers and key code.
+/* Remove all ignored modifiers and the LOCK mask and shift the bits into the
+ * lock mask.
  */
-static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
-        xkb_keycode_t key_code)
+static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
 {
     xkb_mod_mask_t saved_bits;
     unsigned ignore_modifiers = 0;
@@ -96,6 +133,52 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
     modifiers |= saved_bits;
     modifiers &= 127;
 
+    return modifiers;
+}
+
+/* Append an action to a binding.
+ *
+ * @binding may be NULL, then nothing happens.
+ */
+static void append_binding_action(_Nullable struct binding *binding,
+        bool is_release, struct action action)
+{
+    unsigned length = 0;
+    struct action *actions;
+
+    if (binding != NULL) {
+        if (is_release) {
+            actions = binding->release_actions;
+        } else {
+            actions = binding->press_actions;
+        }
+
+        if (actions != NULL) {
+            while (actions[length].type != ACTION_NONE) {
+                length++;
+            }
+        }
+
+        REALLOCATE(actions, length + 2);
+        actions[length] = action;
+        length++;
+        actions[length].type = ACTION_NONE;
+
+        if (is_release) {
+            binding->release_actions = actions;
+        } else {
+            binding->press_actions = actions;
+        }
+    }
+}
+
+/* Get a pointer to the binding corresponding to given modifiers and key code.
+ */
+static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
+        xkb_keycode_t key_code)
+{
+    modifiers = adjust_modifiers(modifiers);
+
     if (key_code < 8 || key_code >= 256) {
         return NULL;
     }
@@ -106,25 +189,13 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
 }
 
 /* Associate a key (with modifiers) on the keyboard with an action. */
-void set_key_binding(bool is_release, xkb_mod_mask_t modifiers,
+void append_key_binding(bool is_release, xkb_mod_mask_t modifiers,
         xkb_keycode_t key_code, struct action action)
 {
     struct binding *binding;
 
     binding = get_key_binding_pointer(modifiers, key_code);
-    if (binding != NULL) {
-        if (is_release) {
-            REALLOCATE(binding->release_actions,
-                    binding->release_actions_length + 1);
-            binding->release_actions[binding->release_actions_length] = action;
-            binding->release_actions_length++;
-        } else {
-            REALLOCATE(binding->press_actions,
-                    binding->press_actions_length + 1);
-            binding->press_actions[binding->press_actions_length] = action;
-            binding->press_actions_length++;
-        }
-    }
+    append_binding_action(binding, is_release, action);
 }
 
 /* struct to pass into `xkb_keymap_key_for_each()` for `set_bind_iterator()` */
@@ -161,7 +232,7 @@ static void set_bind_iterator(struct xkb_keymap *keymap, xkb_keycode_t key_code,
                 level, &key_symbols);
         for (int i = 0; i < count; i++) {
             if (key_symbols[i] == context->key_symbol) {
-                set_key_binding(context->is_release, context->modifiers,
+                append_key_binding(context->is_release, context->modifiers,
                         key_code, context->action);
             }
         }
@@ -169,7 +240,7 @@ static void set_bind_iterator(struct xkb_keymap *keymap, xkb_keycode_t key_code,
 }
 
 /* Set a key binding using a key symbol. */
-void set_key_symbol_binding(bool is_release, xkb_mod_mask_t modifiers,
+void append_key_symbol_binding(bool is_release, xkb_mod_mask_t modifiers,
         xkb_keysym_t key_symbol, struct action action)
 {
     struct key_iterator_context key_iterator_context;
@@ -197,6 +268,64 @@ const struct action *get_key_binding(bool is_release, xkb_mod_mask_t modifiers,
         } else {
             actions = binding->press_actions;
         }
+    }
+    return actions;
+}
+
+/* Get a pointer to the binding corresponding to given modifiers and button
+ * combination.
+ *
+ * If the button is outside the currently allocated range, it is reallocated.
+ */
+static struct binding *get_button_binding_pointer(xkb_mod_mask_t modifiers,
+        xcb_button_t button)
+{
+    modifiers = adjust_modifiers(modifiers);
+
+    if (button >= button_bindings_length) {
+        uint32_t new_length;
+
+        new_length = button + 1;
+        REALLOCATE(button_bindings, new_length);
+        ZERO(&button_bindings[button_bindings_length],
+                new_length - button_bindings_length);
+        button_bindings_length = new_length;
+    }
+
+    return &button_bindings[button][modifiers];
+}
+
+/* Associate a button on the mouse or other device with an action. */
+void append_button_binding(bool is_release, bool is_transparent,
+        xkb_mod_mask_t modifiers, xcb_button_t button, struct action action)
+{
+    struct binding *binding;
+
+    binding = get_button_binding_pointer(modifiers, button);
+    if (binding != NULL) {
+        append_binding_action(binding, is_release, action);
+        if (is_transparent) {
+            binding->flags |= BINDING_TRANSPARENT;
+        }
+    }
+}
+
+/* Get a list of actions associated to a button. */
+const struct action *get_button_binding(bool is_release,
+        xkb_mod_mask_t modifiers, xcb_button_t button,
+        _Out bool *is_transparent)
+{
+    struct binding *binding;
+    struct action *actions = NULL;
+
+    binding = get_button_binding_pointer(modifiers, button);
+    if (binding != NULL) {
+        if (is_release) {
+            actions = binding->release_actions;
+        } else {
+            actions = binding->press_actions;
+        }
+        *is_transparent = !!(binding->flags & BINDING_TRANSPARENT);
     }
     return actions;
 }

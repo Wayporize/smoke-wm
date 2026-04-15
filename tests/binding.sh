@@ -19,30 +19,33 @@ mkdir "$temp/smoke-wm"
 
 # Bindings to test
 bindings=(
-    "P Shift+Control a"
-    "R Control b"
-    "P Mod4 XF86Search"
-    "P Mod1+Mod5 XF86Search"
-    "P Shift+Mod4 XF86Search"
-    "P Control+Shift+Mod4 XF86Search"
-    "P Shift+Mod4+Control XF86AudioMicMute"
-    "P Mod4 a"
-    "P Mod4 b"
-    "P Mod4 c"
-    "P Mod4 d"
-    "P Mod4 e"
-    "R Mod4 F"
-    "P Mod4 g"
-    "P Mod4 dead_caron"
-    "P Mod4 oacute"
-    "P Mod4 ae"
-    "P Control AE"
-    "P Shift+Mod4 b"
-    "P Mod3 Shift_L"
-    "R Mod2 asciitilde"
-    "P Control questiondown"
-    "P None questiondown"
-    "P Lock+Shift+Mod4 KP_Multiply"
+    "KP Shift+Control a"
+    "KR Control b"
+    "KP Mod4 XF86Search"
+    "KP Mod1+Mod5 XF86Search"
+    "KP Shift+Mod4 XF86Search"
+    "KP Control+Shift+Mod4 XF86Search"
+    "KP Shift+Mod4+Control XF86AudioMicMute"
+    "KP Mod4 a"
+    "KP Mod4 b"
+    "KP Mod4 c"
+    "KP Mod4 d"
+    "KP Mod4 e"
+    "KR Mod4 F"
+    "KP Mod4 g"
+    "KP Mod4 dead_caron"
+    "KP Mod4 oacute"
+    "KP Mod4 ae"
+    "KP Control AE"
+    "KP Shift+Mod4 b"
+    "KP Mod3 Shift_L"
+    "KR Mod2 asciitilde"
+    "KP Control questiondown"
+    "KP None questiondown"
+    "KP Lock+Shift+Mod4 KP_Multiply"
+    "BP None LeftButton"
+    "BR Alt RightButton"
+    "BP Shift+Super ScrollUp"
 )
 
 # Translate an X core modifier to an integer mask
@@ -56,6 +59,19 @@ modifier_to_integer() {
     [Mm]od3) integer=32 ;;
     [Mm]od4) integer=64 ;;
     [Mm]od5) integer=128 ;;
+    *)
+        # Use xmodmap, it might have the right key like Alt_L associated to a
+        # modifier
+        if modifier="$(xmodmap | grep "$1")" ; then
+            # The output is for example "mod4      ...", so trim the all after
+            # "mod4"
+            modifier_to_integer "${modifier%% *}"
+            return
+        else
+            echo "invalid modifier: $1"
+            exit 1
+        fi
+        ;;
     esac
     echo -n "$integer"
 }
@@ -76,36 +92,54 @@ for b in "${bindings[@]}" ; do
     release="${fields[0]}"
     modifiers="${fields[1]}"
     key_symbol="${fields[2]}"
+    button="${fields[2]}"
 
     echo '[[wm.binding]]' >> "$temp/smoke-wm/config.toml"
-    if [ "$release" = "R" ] ; then
+    if [ "${release:1}" = "R" ] ; then
         echo "release = true" >> "$temp/smoke-wm/config.toml"
     fi
     echo "modifiers = \"$modifiers\"" >> "$temp/smoke-wm/config.toml"
-    echo "key = \"$key_symbol\"" >> "$temp/smoke-wm/config.toml"
+    if [ "${release:0:1}" = "K" ] ; then
+        echo "key = \"$key_symbol\"" >> "$temp/smoke-wm/config.toml"
+    else
+        echo "button = \"$button\"" >> "$temp/smoke-wm/config.toml"
+    fi
 
     old_IFS="$IFS"
     IFS='+'
     modifiers=0
     for m in ${fields[1]} ; do
-        case $m in
+        case "$m" in
         None) break ;;
-        *) modifiers=$((modifiers | $(modifier_to_integer "$m")))
+        *) modifiers=$((modifiers | $(modifier_to_integer "$m"))) ;;
         esac
     done
     IFS="$old_IFS"
 
     modifiers=$((modifiers & ~ignore_modifiers_mask))
 
-    # This is how we interpret the xmodmap output:
-    # [0] = "keycode"
-    # [1] = keycode value
-    # [2] = "="
-    # [3...] = key symbols
-    while read -r line ; do
-        modmap_fields=($line)
-        hard_bindings+=("$release $modifiers ${modmap_fields[1]}")
-    done < <(xmodmap -pke | grep -E '\<'"$key_symbol"'\>')
+    if [ "${release:0:1}" = "K" ] ; then
+        # This is how we interpret the xmodmap output:
+        # [0] = "keycode"
+        # [1] = keycode value
+        # [2] = "="
+        # [3...] = key symbols
+        while read -r line ; do
+            modmap_fields=($line)
+            hard_bindings+=("$release $modifiers ${modmap_fields[1]}")
+        done < <(xmodmap -pke | grep -E '\<'"$key_symbol"'\>')
+    else
+        case "$button" in
+        L*) button=0 ;;
+        M*) button=1 ;;
+        R*) button=2 ;;
+        [WS]*U*) button=3 ;;
+        [WS]*D*) button=4 ;;
+        [WS]*L*) button=5 ;;
+        [WS]*R*) button=6 ;;
+        esac
+        hard_bindings+=("$release $modifiers $button")
+    fi
 done
 
 # Capture input of the smoke-wm program
@@ -135,7 +169,7 @@ while read -r line ; do
             continue
         fi
 
-        # Compare keycodes
+        # Compare keycodes/buttons
         is_k_match=false
         for k in $keycodes ; do
             if [ ${fields[2]} -eq $k ] ; then
@@ -165,7 +199,6 @@ while read -r line ; do
         new_hard_bindings+=("$b")
     done
     hard_bindings=("${new_hard_bindings[@]}")
-
 done
 } < <(XDG_CONFIG_HOME="$temp" "$run")
 

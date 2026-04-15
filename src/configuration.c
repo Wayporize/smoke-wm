@@ -80,17 +80,20 @@ void set_configuration_bindings(struct wm *wm)
         action.type = wm->binding[i].action;
         action.value = wm->binding[i].value;
         if (wm->binding[i].button != 0) {
-            /* TODO: set button binding */
+            append_button_binding(wm->binding[i].is_release,
+                    wm->binding[i].is_transparent,
+                    wm->binding[i].modifiers, wm->binding[i].button - 1,
+                    action);
         }
 
         if (wm->binding[i].key_code != XKB_KEY_NoSymbol) {
-            set_key_binding(wm->binding[i].is_release,
+            append_key_binding(wm->binding[i].is_release,
                     wm->binding[i].modifiers, wm->binding[i].key_code,
                     action);
         }
 
         if (wm->binding[i].key_symbol != XKB_KEY_NoSymbol) {
-            set_key_symbol_binding(wm->binding[i].is_release,
+            append_key_symbol_binding(wm->binding[i].is_release,
                     wm->binding[i].modifiers, wm->binding[i].key_symbol,
                     action);
         }
