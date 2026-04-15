@@ -2,7 +2,7 @@
 #define ACTION_H
 
 enum action_type {
-    ACTION_NONE
+    ACTION_NULL
 };
 
 union action_value {

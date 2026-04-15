@@ -466,7 +466,7 @@ static enum action_type resolve_action(struct toml_parse_context *context,
         const char *string)
 {
     /* TODO: implement when actions are there */
-    return ACTION_NONE;
+    return ACTION_NULL;
 }
 
 static union action_value resolve_action_value(

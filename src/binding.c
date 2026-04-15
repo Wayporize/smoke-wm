@@ -20,11 +20,11 @@ struct binding {
     /* one of the above `BINDING_*` flags */
     unsigned flags;
     /* the actions to execute when the button/key is pressed (terminated by
-     * ACTION_NONE)
+     * `ACTION_NULL`)
      */
     struct action *press_actions;
     /* the actions to execute when the button/key is released (terminated by
-     * ACTION_NONE)
+     * `ACTION_NULL`)
      */
     struct action *release_actions;
 };
@@ -86,28 +86,24 @@ void clear_bindings(void)
     for (unsigned kc = 0; kc < SIZE(key_bindings); kc++) {
         for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
-            if (binding->press_actions != NULL) {
-                free(binding->press_actions);
-                binding->press_actions = NULL;
-            }
-            if (binding->release_actions != NULL) {
-                free(binding->release_actions);
-                binding->release_actions = NULL;
-            }
+
+            free(binding->press_actions);
+            binding->press_actions = NULL;
+
+            free(binding->release_actions);
+            binding->release_actions = NULL;
         }
     }
 
     for (unsigned b = 0; b < button_bindings_length; b++) {
         for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
             binding = &button_bindings[b][m];
-            if (binding->press_actions != NULL) {
-                free(binding->press_actions);
-                binding->press_actions = NULL;
-            }
-            if (binding->release_actions != NULL) {
-                free(binding->release_actions);
-                binding->release_actions = NULL;
-            }
+
+            free(binding->press_actions);
+            binding->press_actions = NULL;
+
+            free(binding->release_actions);
+            binding->release_actions = NULL;
         }
     }
 }
@@ -153,16 +149,20 @@ static void append_binding_action(_Nullable struct binding *binding,
             actions = binding->press_actions;
         }
 
+        /* get the length of the action list */
         if (actions != NULL) {
-            while (actions[length].type != ACTION_NONE) {
+            while (actions[length].type != ACTION_NULL) {
                 length++;
             }
         }
 
+        /* `length` is now the number of actions excluding `ACTION_NULL` so add
+         * 2 for the new `action` and `ACTION_NULL`
+         */
         REALLOCATE(actions, length + 2);
         actions[length] = action;
         length++;
-        actions[length].type = ACTION_NONE;
+        actions[length].type = ACTION_NULL;
 
         if (is_release) {
             binding->release_actions = actions;
@@ -179,6 +179,7 @@ static struct binding *get_key_binding_pointer(xkb_mod_mask_t modifiers,
 {
     modifiers = adjust_modifiers(modifiers);
 
+    /* the X server does not support values outside this range */
     if (key_code < 8 || key_code >= 256) {
         return NULL;
     }
