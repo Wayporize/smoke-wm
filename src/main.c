@@ -86,17 +86,26 @@ int main(int argc, char **argv)
     /* associated to test tests/home.sh */
     printf("user home: %s\n", user_home);
 
-    /* get the configuration path and parse the configuration */
     path = get_configuration_path();
 
     /* associated to test tests/configuration-path.sh */
     printf("configuration path: %s\n", path);
 
+#ifdef DEBUG
+    /* flush so a few tests can already exit */
+    fflush(stdout);
+#endif
+
     open_display();
 
+    /* parse the configuration or set the default one */
     if (path != NULL) {
-        parse_toml_configuration(path, &Configuration);
-        set_configuration_bindings(&Configuration);
+        if (parse_toml_configuration(path, &Configuration) == 0) {
+            set_configuration_bindings(&Configuration);
+        } else {
+            Configuration = Configuration_default;
+            /* TODO: set default bindings */
+        }
         free(path);
     } else {
         Configuration = Configuration_default;
