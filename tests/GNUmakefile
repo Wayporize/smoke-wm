@@ -9,7 +9,3 @@ TOML_SOURCES := src/x11.c src/utility/*.c src/binding.c src/configuration.c src/
 build/tests/toml/run: tests/toml/run.c $(TOML_SOURCES)
 	mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) -Iinclude $^ -o $@ $(C_LIBS)
-
-build/tests/configuration/run: tests/configuration/run.c $(TOML_SOURCES)
-	mkdir -p $(dir $@)
-	$(CC) $(C_FLAGS) -Iinclude $^ -o $@ $(C_LIBS)

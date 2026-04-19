@@ -113,6 +113,11 @@ int main(int argc, char **argv)
     }
 
 #ifdef DEBUG
+    /* associated to test tests/configuration.sh */
+    printf("start of dumping configuration\n");
+    debug_dump_configuration(&Configuration);
+    printf("end of dumping configuration\n");
+
     /* associated to test tests/bindings.sh */
     printf("start of dumping bindings\n");
     debug_dump_bindings();

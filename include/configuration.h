@@ -152,6 +152,13 @@ extern struct wm {
     }, startup);
 } Configuration, Configuration_default;
 
+#ifdef DEBUG
+
+/* Dump all configuration options to stdout. */
+void debug_dump_configuration(struct wm *wm);
+
+#endif
+
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm);
 
