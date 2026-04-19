@@ -101,13 +101,18 @@ int main(int argc, char **argv)
     /* parse the configuration or set the default one */
     if (path != NULL) {
         if (parse_toml_configuration(path, &Configuration) == 0) {
+            /* associated to test tests/toml.sh */
+            printf("parsing configuration succeeded\n");
             set_configuration_bindings(&Configuration);
         } else {
+            /* associated to test tests/toml.sh */
+            printf("parsing configuration failed\n");
             Configuration = Configuration_default;
             /* TODO: set default bindings */
         }
         free(path);
     } else {
+        printf("no configuration, using default\n");
         Configuration = Configuration_default;
         /* TODO: set default bindings */
     }
