@@ -48,6 +48,11 @@ int main(int argc, char **argv)
 
     (void) setlocale(LC_ALL, "");
 
+#ifdef DEBUG
+    /* make stdout line buffered */
+    setvbuf(stdout, NULL, _IOLBF, 0);
+#endif
+
     /* store the first argument containing the executable */
     program_name = argv[0];
 
@@ -91,11 +96,6 @@ int main(int argc, char **argv)
     /* associated to test tests/configuration-path.sh */
     printf("configuration path: %s\n", path);
 
-#ifdef DEBUG
-    /* flush so a few tests can already exit */
-    fflush(stdout);
-#endif
-
     open_display();
 
     /* parse the configuration or set the default one */
@@ -127,10 +127,10 @@ int main(int argc, char **argv)
     printf("start of dumping bindings\n");
     debug_dump_bindings();
     printf("end of dumping bindings\n");
-
-    /* if test cases are running, we must flush our printed data */
-    fflush(stdout);
 #endif
+
+    /* become the active window manager */
+    take_wm_control();
 
     /* receive all events by the server and handle them */
     handle_server_events();

@@ -18,8 +18,9 @@
 #endif
 
 /* Abort the program after printing an error message. */
-#define ABORT(message) do { \
-    fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, (message)); \
+#define ABORT(...) do { \
+    fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
+    fprintf(stderr, __VA_ARGS__); \
     abort(); \
 } while (0)
 
@@ -53,9 +54,9 @@
  * Only use this for really critical parts where the rest of the code will not
  * function if a specific error occurs.  E.g. a memory allocation error.
  */
-#define ASSERT(x, message) do { \
+#define ASSERT(x, ...) do { \
     if (UNLIKELY(!(x))) { \
-        ABORT(message); \
+        ABORT(__VA_ARGS__); \
     } \
 } while (0)
 

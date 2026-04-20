@@ -7,6 +7,11 @@
 struct display {
     /* connection to the X server */
     xcb_connection_t *xcb;
+    /* currently active screen */
+    xcb_screen_t *screen;
+    unsigned screen_index;
+    /* root window on the active screen */
+    xcb_window_t root;
     /* xkb event and error identifiers */
     uint8_t xkb_base_event, xkb_base_error;
     /* id of the core keyboard device */
@@ -27,6 +32,12 @@ extern struct display display;
  * This function exits if an error occured.
  */
 void open_display(void);
+
+/* Try to become the window manager on the current X11 connection.
+ *
+ * If this fails, the program exits.
+ */
+void take_wm_control(void);
 
 /* Handle incoming events on the X11 connection.
  *

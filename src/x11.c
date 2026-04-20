@@ -21,17 +21,12 @@ static void refresh_keyboard_mapping(void)
 
     display.keymap = xkb_x11_keymap_new_from_device(display.xkb, display.xcb,
             display.keyboard_device_id, 0);
-    if (display.keymap == NULL) {
-        printf("could not create xkb keymap\n");
-        exit(1);
-    }
+    ASSERT(display.keymap != NULL, "could not create xkb keymap\n");
 
     display.keyboard_state = xkb_x11_state_new_from_device(display.keymap,
             display.xcb, display.keyboard_device_id);
-    if (display.keyboard_state == NULL) {
-        printf("could not create xkb keyboard state\n");
-        exit(1);
-    }
+    ASSERT(display.keyboard_state != NULL,
+            "could not create xkb keyboard state\n");
 }
 
 /* Initialize the Xkb extension and xkbcommon library. */
@@ -64,44 +59,28 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
     xcb_xkb_per_client_flags_reply_t *client_reply;
 
     extension_reply = xcb_get_extension_data(display.xcb, &xcb_xkb_id);
-    if (extension_reply == NULL) {
-        printf("failed to query xcb extension data for xkb\n");
-        exit(1);
-    } else if (!extension_reply->present) {
-        printf("xkb is not available on the server\n");
-        exit(1);
-    }
+    ASSERT(extension_reply != NULL,
+            "failed to query xcb extension data for xkb\n");
+    ASSERT(extension_reply->present,
+            "xkb is not available on the server\n");
 
     display.xkb_base_event = extension_reply->first_event;
     display.xkb_base_error = extension_reply->first_error;
 
     reply = xcb_xkb_use_extension_reply(display.xcb, cookie, &error);
-    if (reply == NULL) {
-        printf("using xcb extension xkb failed: error code %d\n",
-                error->error_code);
-        free(error);
-        exit(1);
-    } else if (!reply->supported) {
-        printf("server does not support xkb version %d.%d\n",
+    ASSERT(reply != NULL, "using xcb extension xkb failed: error code %d\n",
+            error->error_code);
+    ASSERT(reply->supported, "server does not support xkb version %d.%d\n",
                 XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
-        exit(1);
-    }
-
     free(reply);
 
     display.xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (display.xkb == NULL) {
-        printf("could not create xkb context\n");
-        exit(1);
-    }
+    ASSERT(display.xkb != NULL, "could not create xkb context\n");
 
     /* get the device id of the core keyboard */
     device_reply = xcb_xkb_get_device_info_reply(display.xcb, device_cookie,
             NULL);
-    if (device_reply == NULL) {
-        printf("could not get xkb device info\n");
-        exit(1);
-    }
+    ASSERT(device_reply != NULL, "could not get xkb device info\n");
     display.keyboard_device_id = device_reply->deviceID;
     free(device_reply);
 
@@ -130,51 +109,64 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
 
     client_reply = xcb_xkb_per_client_flags_reply(display.xcb, client_cookie,
             &error);
-    if (client_reply == NULL) {
-        printf("could not set xkb per client flags\n");
-        exit(1);
-    } else {
-        if (!(client_reply->value & XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT)) {
-            printf("could not set per client flags (X server can not comply)\n");
-            exit(1);
-        }
-        free(client_reply);
-    }
+    ASSERT(client_reply != NULL, "could not set xkb per client flags\n");
+    ASSERT((client_reply->value & XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT),
+            "could not set per client flags (X server can not comply)\n");
+    free(client_reply);
 
     /* do an initial refresh */
     refresh_keyboard_mapping();
 }
 
+/* Get a string representation of a connection error. */
+static const char *get_connection_error_string(int error)
+{
+    switch (error) {
+    case 0:
+        return "success";
+    case XCB_CONN_ERROR:
+        return "socket, pipe or other error";
+    case XCB_CONN_CLOSED_EXT_NOTSUPPORTED:
+        return "extension not supported";
+    case XCB_CONN_CLOSED_MEM_INSUFFICIENT:
+        return "memory was insufficient";
+    case XCB_CONN_CLOSED_REQ_LEN_EXCEED:
+        return "exceeded request length that server accepts";
+    case XCB_CONN_CLOSED_PARSE_ERR:
+        return "error parsing display string";
+    case XCB_CONN_CLOSED_INVALID_SCREEN:
+        return "server does not have a screen matching the display";
+    default:
+        return "unknown connection error";
+    }
+}
+
 /* Open the X11 connection and initialize extensions. */
 void open_display(void)
 {
+    int screen_index;
     int connection_error;
+    const xcb_setup_t *setup;
+    xcb_screen_iterator_t iterator;
     xcb_xkb_use_extension_cookie_t xkb_cookie;
     xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
     xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
 
     /* connect to the X server */
-    display.xcb = xcb_connect(NULL, NULL);
+    display.xcb = xcb_connect(NULL, &screen_index);
     connection_error = xcb_connection_has_error(display.xcb);
-    switch (connection_error) {
-    case XCB_CONN_ERROR:
-        printf("socket, pipe or other error\n");
-        exit(1);
-    case XCB_CONN_CLOSED_EXT_NOTSUPPORTED:
-        printf("extension not supported\n");
-        exit(1);
-    case XCB_CONN_CLOSED_MEM_INSUFFICIENT:
-        printf("memory was insufficient\n");
-        exit(1);
-    case XCB_CONN_CLOSED_REQ_LEN_EXCEED:
-        printf("exceeded request length that server accepts\n");
-        exit(1);
-    case XCB_CONN_CLOSED_PARSE_ERR:
-        printf("error parsing display string\n");
-        exit(1);
-    case XCB_CONN_CLOSED_INVALID_SCREEN:
-        printf("server does not have a screen matching the display\n");
-        exit(1);
+    ASSERT(connection_error == 0, "%s\n",
+            get_connection_error_string(connection_error));
+
+    display.screen_index = screen_index;
+    setup = xcb_get_setup(display.xcb);
+    for (iterator = xcb_setup_roots_iterator(setup);
+            iterator.rem > 0; screen_index--, xcb_screen_next(&iterator)) {
+        if (screen_index == 0) {
+            display.screen = iterator.data;
+            display.root = display.screen->root;
+            break;
+        }
     }
 
     xcb_prefetch_extension_data(display.xcb, &xcb_xkb_id);
@@ -196,6 +188,24 @@ void open_display(void)
             0, 0, 0);
 
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
+}
+
+/* Get the owner of the selection specified by given atom. */
+static xcb_window_t get_selection_owner(xcb_atom_t atom)
+{
+    xcb_get_selection_owner_cookie_t owner_cookie;
+    xcb_get_selection_owner_reply_t *owner_reply;
+    xcb_window_t owner;
+
+    owner_cookie = xcb_get_selection_owner(display.xcb, atom);
+    owner_reply = xcb_get_selection_owner_reply(display.xcb, owner_cookie,
+            NULL);
+    ASSERT(owner_reply != NULL, "could not get selection owner\n");
+
+    owner = owner_reply->owner;
+    free(owner_reply);
+
+    return owner;
 }
 
 /* Handle an event by the xkb extension. */
@@ -233,32 +243,184 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
     }
 }
 
-/* Handle incoming events on the X11 connection. */
-void handle_server_events(void)
+/* Handle all extensions events.
+ *
+ * @event is the event to handle.
+ *
+ * @return 0 if the event was an extension event, otherwise non-zero.
+ */
+static int handle_extension_event(xcb_generic_event_t *event)
 {
-    xcb_generic_event_t *event;
+    int status = 1;
     int error;
 
-    /* do an initial flush so all requests are sent out before entering the
-     * event loop
-     */
-    xcb_flush(display.xcb);
+    if (event != NULL && event->response_type == display.xkb_base_event) {
+        handle_xkb_event(event);
+        status = 0;
+    }
 
-    while (event = xcb_wait_for_event(display.xcb), event != NULL) {
-        if (event->response_type == display.xkb_base_event) {
-            handle_xkb_event(event);
-        } else {
-            printf("event: %u\n", event->response_type);
-            switch (event->response_type) {
-                /* TODO: Handle more X11 events */
+    error = xcb_connection_has_error(display.xcb);
+    ASSERT(error == 0, "xcb connection error: %s\n",
+            get_connection_error_string(error));
+
+    return status;
+}
+
+/* Try to become the window manager on the current X11 connection. */
+void take_wm_control(void)
+{
+    xcb_window_t manager_window;
+    xcb_generic_event_t *event;
+    char *atom_name;
+    xcb_intern_atom_cookie_t atom_cookie;
+    xcb_intern_atom_reply_t *atom_reply;
+    xcb_atom_t wm_sn_atom;
+    xcb_window_t old_manager_window;
+    xcb_timestamp_t timestamp = 0;
+    xcb_window_t owner;
+
+    const uint32_t root_mask = XCB_CW_EVENT_MASK;
+    const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+
+    const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
+    const uint32_t managed_root_attributes[] = {
+        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+    };
+
+    const uint32_t manager_mask = XCB_CW_EVENT_MASK;
+    const uint32_t manager_attributes[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+
+    /* listen for property notify events */
+    xcb_change_window_attributes(display.xcb, display.root,
+            root_mask, root_attributes);
+
+    /* cause a property notify event but do not change anything */
+    xcb_change_property(display.xcb, XCB_PROP_MODE_APPEND, display.root,
+            XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, 0, NULL);
+
+    /* create specific manager window as per ICCCM */
+    manager_window = xcb_generate_id(display.xcb);
+    xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT, manager_window,
+            display.root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY,
+            XCB_COPY_FROM_PARENT, manager_mask, manager_attributes);
+
+    /* prefetch the WM_Sn atom */
+    atom_name = xasprintf("WM_S%u", display.screen_index);
+    atom_cookie = xcb_intern_atom(display.xcb, false, strlen(atom_name),
+            atom_name);
+
+    /* get the timestamp from the property notify event */
+    while (true) {
+        xcb_flush(display.xcb);
+        event = xcb_wait_for_event(display.xcb);
+        if (handle_extension_event(event) != 0) {
+            if (event->response_type == XCB_PROPERTY_NOTIFY) {
+                /* got the property notify event we were looking for */
+                timestamp = ((xcb_property_notify_event_t*) event)->time;
+                free(event);
+                break;
             }
         }
         free(event);
     }
 
-    error = xcb_connection_has_error(display.xcb);
-    if (error > 0) {
-        printf("xcb connection error occured\n");
-        exit(1);
+    /* get the value of the WM_Sn atom */
+    atom_reply = xcb_intern_atom_reply(display.xcb, atom_cookie, NULL);
+    ASSERT(atom_reply != NULL, "could not intern %s atom\n", atom_name);
+    free(atom_name);
+    wm_sn_atom = atom_reply->atom;
+    free(atom_reply);
+
+    owner = get_selection_owner(wm_sn_atom);
+
+    do {
+        old_manager_window = owner;
+        if (old_manager_window == XCB_NONE) {
+            break;
+        }
+
+        xcb_change_window_attributes(display.xcb, old_manager_window,
+                manager_mask, manager_attributes);
+        owner = get_selection_owner(wm_sn_atom);
+    } while (owner != old_manager_window);
+
+    xcb_set_selection_owner(display.xcb, manager_window, wm_sn_atom, timestamp);
+    owner = get_selection_owner(wm_sn_atom);
+    ASSERT(owner == manager_window, "a 3rd manager interferred\n");
+
+    if (old_manager_window != XCB_NONE) {
+        /* wait until the old manager destroyed the manager window */
+        printf("waiting until the old manager destroys the manager window...\n");
+        while (true) {
+            xcb_flush(display.xcb);
+            event = xcb_wait_for_event(display.xcb);
+            if (handle_extension_event(event) != 0) {
+                if (event->response_type == XCB_DESTROY_NOTIFY &&
+                        ((xcb_destroy_notify_event_t*) event)->window ==
+                            old_manager_window) {
+                    printf("...success\n");
+                    free(event);
+                    break;
+                }
+            }
+            free(event);
+        }
     }
+
+    printf("taking over...\n");
+    xcb_change_window_attributes(display.xcb, display.root,
+            managed_root_mask, managed_root_attributes);
+}
+
+/* Handle an error that occured. */
+static void handle_error(xcb_generic_error_t *error)
+{
+    if (error->error_code == XCB_ACCESS &&
+            error->resource_id == display.root &&
+            error->major_code == XCB_CHANGE_WINDOW_ATTRIBUTES) {
+        ABORT("...could not access root window.  "
+                "The running window manager is not complying to "
+                "ICCCM section 2.8\n");
+    }
+    printf("error: %u\n", error->error_code);
+}
+
+/* Handle a map request issued then a client called MapWindow. */
+void handle_map_request(xcb_map_request_event_t *event)
+{
+    printf("got map request: 0x%x\n", event->window);
+}
+
+/* Handle incoming events on the X11 connection. */
+void handle_server_events(void)
+{
+    xcb_generic_event_t *event;
+    int status;
+
+    do {
+        /* flush so all requests are sent out before the next iteration */
+        xcb_flush(display.xcb);
+        /* block until another xcb event arrives */
+        event = xcb_wait_for_event(display.xcb);
+        /* check for extension events */
+        status = handle_extension_event(event);
+        if (status != 0) {
+            switch (event->response_type) {
+            case XCB_NONE:
+                handle_error((xcb_generic_error_t*) event);
+                break;
+
+            case XCB_MAP_REQUEST:
+                handle_map_request((xcb_map_request_event_t*) event);
+                break;
+
+            default:
+                printf("event: %u\n", event->response_type);
+                /* TODO: Handle core X11 events */
+            }
+            status = 0;
+        }
+        free(event);
+    } while (status == 0);
 }
