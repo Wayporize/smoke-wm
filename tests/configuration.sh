@@ -7,7 +7,7 @@ run=./build/smoke-wm
 make "$run"
 
 # Create a temporary directory and clean it up at exit
-temp="$(mktemp -d /tmp/bindings.XXXXXX)"
+temp="$(mktemp -d /tmp/configuration.XXXXXX)"
 
 at_exit() {
     rm -rf "$temp"
@@ -46,12 +46,12 @@ for f in tests/toml/valid/*.toml ; do
         echo "$line" >> "$result"
     done
 
+    } < <(XDG_CONFIG_HOME="$temp" "$run")
+
     # Compare the actually received with the expected output
     if ! cmp -s "$result" "$output" ; then
         echo "compare failed on $f"
         diff "$result" "$output"
         exit 1
     fi
-
-    } < <(XDG_CONFIG_HOME="$temp" "$run")
 done
