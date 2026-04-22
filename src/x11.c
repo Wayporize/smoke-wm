@@ -266,49 +266,16 @@ static int handle_extension_event(xcb_generic_event_t *event)
     return status;
 }
 
-/* Try to become the window manager on the current X11 connection. */
-void take_wm_control(void)
+/* Get a timestamp from the server using an empty property append. */
+static xcb_timestamp_t get_server_timestamp(void)
 {
-    xcb_window_t manager_window;
     xcb_generic_event_t *event;
-    char *atom_name;
-    xcb_intern_atom_cookie_t atom_cookie;
-    xcb_intern_atom_reply_t *atom_reply;
-    xcb_atom_t wm_sn_atom;
-    xcb_window_t old_manager_window;
-    xcb_timestamp_t timestamp = 0;
-    xcb_window_t owner;
-
-    const uint32_t root_mask = XCB_CW_EVENT_MASK;
-    const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
-
-    const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
-    const uint32_t managed_root_attributes[] = {
-        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
-            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
-    };
-
-    const uint32_t manager_mask = XCB_CW_EVENT_MASK;
-    const uint32_t manager_attributes[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
-
-    /* listen for property notify events */
-    xcb_change_window_attributes(display.xcb, display.root,
-            root_mask, root_attributes);
+    xcb_property_notify_event_t *notify;
+    xcb_timestamp_t timestamp;
 
     /* cause a property notify event but do not change anything */
     xcb_change_property(display.xcb, XCB_PROP_MODE_APPEND, display.root,
             XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, 0, NULL);
-
-    /* create specific manager window as per ICCCM */
-    manager_window = xcb_generate_id(display.xcb);
-    xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT, manager_window,
-            display.root, -1, -1, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY,
-            XCB_COPY_FROM_PARENT, manager_mask, manager_attributes);
-
-    /* prefetch the WM_Sn atom */
-    atom_name = xasprintf("WM_S%u", display.screen_index);
-    atom_cookie = xcb_intern_atom(display.xcb, false, strlen(atom_name),
-            atom_name);
 
     /* get the timestamp from the property notify event */
     while (true) {
@@ -316,23 +283,53 @@ void take_wm_control(void)
         event = xcb_wait_for_event(display.xcb);
         if (handle_extension_event(event) != 0) {
             if (event->response_type == XCB_PROPERTY_NOTIFY) {
-                /* got the property notify event we were looking for */
-                timestamp = ((xcb_property_notify_event_t*) event)->time;
-                free(event);
-                break;
+                notify = (xcb_property_notify_event_t*) event;
+                /* TODO: for now this can only be from the root, make sure to
+                 * properly handle the case where property notify events can
+                 * come in from other sources
+                 */
+                if (notify->atom == XCB_ATOM_WM_NAME &&
+                        notify->state == XCB_PROPERTY_NEW_VALUE) {
+                    /* got the property notify event we were looking for */
+                    timestamp = notify->time;
+                    free(event);
+                    break;
+                }
             }
         }
         free(event);
     }
 
-    /* get the value of the WM_Sn atom */
-    atom_reply = xcb_intern_atom_reply(display.xcb, atom_cookie, NULL);
-    ASSERT(atom_reply != NULL, "could not intern %s atom\n", atom_name);
-    free(atom_name);
-    wm_sn_atom = atom_reply->atom;
-    free(atom_reply);
+    return timestamp;
+}
 
-    owner = get_selection_owner(wm_sn_atom);
+/* Take ownership of the WM_Sn selection.
+ *
+ * This also selects the SUBSTRUCTURE_REDIRECT event mask on the root window to
+ * redirect certain events for window management.
+ */
+static void take_wm_manager_ownership(xcb_timestamp_t timestamp)
+{
+    const uint32_t manager_mask = XCB_CW_EVENT_MASK;
+    const uint32_t manager_attributes[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+    xcb_window_t owner, old_manager_window;
+
+    const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
+    const uint32_t managed_root_attributes[] = {
+        XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
+    };
+    xcb_generic_event_t *event;
+    xcb_client_message_event_t message;
+
+    /* create specific manager window as per ICCCM */
+    display.wm_manager_window = xcb_generate_id(display.xcb);
+    xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT,
+            display.wm_manager_window, display.root, -1, -1, 1, 1, 0,
+            XCB_WINDOW_CLASS_INPUT_ONLY, XCB_COPY_FROM_PARENT,
+            manager_mask, manager_attributes);
+
+    owner = get_selection_owner(display.wm_sn_atom);
 
     do {
         old_manager_window = owner;
@@ -342,15 +339,25 @@ void take_wm_control(void)
 
         xcb_change_window_attributes(display.xcb, old_manager_window,
                 manager_mask, manager_attributes);
-        owner = get_selection_owner(wm_sn_atom);
+        owner = get_selection_owner(display.wm_sn_atom);
     } while (owner != old_manager_window);
 
-    xcb_set_selection_owner(display.xcb, manager_window, wm_sn_atom, timestamp);
-    owner = get_selection_owner(wm_sn_atom);
-    ASSERT(owner == manager_window, "a 3rd manager interferred\n");
+    xcb_set_selection_owner(display.xcb, display.wm_manager_window,
+            display.wm_sn_atom, timestamp);
+    owner = get_selection_owner(display.wm_sn_atom);
+    ASSERT(owner == display.wm_manager_window, "a 3rd manager interferred\n");
+
+    message.response_type = XCB_CLIENT_MESSAGE;
+    message.window = display.root;
+    message.format = 32;
+    message.type = display.manager_atom;
+    message.data.data32[0] = timestamp;
+    message.data.data32[1] = display.wm_sn_atom;
+    message.data.data32[2] = display.wm_manager_window;
+    xcb_send_event(display.xcb, false, display.root,
+            XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) &message);
 
     if (old_manager_window != XCB_NONE) {
-        /* wait until the old manager destroyed the manager window */
         printf("waiting until the old manager destroys the manager window...\n");
         while (true) {
             xcb_flush(display.xcb);
@@ -368,9 +375,57 @@ void take_wm_control(void)
         }
     }
 
-    printf("taking over...\n");
     xcb_change_window_attributes(display.xcb, display.root,
             managed_root_mask, managed_root_attributes);
+    printf("taking over\n");
+}
+
+/* Try to become the window manager on the current X11 connection. */
+void take_wm_control(void)
+{
+    /* list for property change events on the root to get the server timestamp
+     */
+    const uint32_t root_mask = XCB_CW_EVENT_MASK;
+    const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+
+    char *wm_sn_atom_name;
+    const char *const manager_atom_name = "MANAGER";
+    xcb_intern_atom_cookie_t wm_sn_atom_cookie, manager_atom_cookie;
+    xcb_intern_atom_reply_t *wm_sn_atom_reply, *manager_atom_reply;
+    xcb_timestamp_t timestamp;
+
+    /* listen for property notify events */
+    xcb_change_window_attributes(display.xcb, display.root,
+            root_mask, root_attributes);
+
+    /* prefetch the WM_Sn atom and MANAGER atom */
+    wm_sn_atom_name = xasprintf("WM_S%u", display.screen_index);
+    wm_sn_atom_cookie = xcb_intern_atom(display.xcb, false,
+            strlen(wm_sn_atom_name), wm_sn_atom_name);
+
+    manager_atom_cookie = xcb_intern_atom(display.xcb, false,
+            strlen(manager_atom_name), manager_atom_name);
+
+    timestamp = get_server_timestamp();
+
+    /* get the value of the WM_Sn atom */
+    wm_sn_atom_reply = xcb_intern_atom_reply(display.xcb, wm_sn_atom_cookie,
+            NULL);
+    ASSERT(wm_sn_atom_reply != NULL, "could not intern %s atom\n",
+            wm_sn_atom_name);
+    free(wm_sn_atom_name);
+    display.wm_sn_atom = wm_sn_atom_reply->atom;
+    free(wm_sn_atom_reply);
+
+    /* get the value of the MANAGER atom */
+    manager_atom_reply = xcb_intern_atom_reply(display.xcb, manager_atom_cookie,
+            NULL);
+    ASSERT(manager_atom_reply != NULL, "could not intern %s atom\n",
+            manager_atom_name);
+    display.manager_atom = manager_atom_reply->atom;
+    free(manager_atom_reply);
+
+    take_wm_manager_ownership(timestamp);
 }
 
 /* Handle an error that occured. */
@@ -379,17 +434,103 @@ static void handle_error(xcb_generic_error_t *error)
     if (error->error_code == XCB_ACCESS &&
             error->resource_id == display.root &&
             error->major_code == XCB_CHANGE_WINDOW_ATTRIBUTES) {
-        ABORT("...could not access root window.  "
+        ABORT("Could not access root window.  "
                 "The running window manager is not complying to "
-                "ICCCM section 2.8\n");
+                "ICCCM section 2.8.\n");
     }
     printf("error: %u\n", error->error_code);
 }
 
-/* Handle a map request issued then a client called MapWindow. */
-void handle_map_request(xcb_map_request_event_t *event)
+/* Handle a map request issued when a client called MapWindow. */
+static void handle_map_request(xcb_map_request_event_t *event)
 {
     printf("got map request: 0x%x\n", event->window);
+    xcb_map_window(display.xcb, event->window);
+}
+
+/* Wait for the selection to become free again.
+ *
+ * We do this by waiting until all owners are destroyed.
+ * 
+ * @owner is the initial owner.
+ */
+static void go_dormant_and_wait_for_selection(xcb_window_t owner)
+{
+    xcb_generic_event_t *event;
+    int status;
+    xcb_timestamp_t timestamp;
+
+    printf("going dormant\n");
+    do {
+        /* flush so all requests are sent out before the next iteration */
+        xcb_flush(display.xcb);
+        /* block until another xcb event arrives */
+        event = xcb_wait_for_event(display.xcb);
+        /* check for extension events */
+        status = handle_extension_event(event);
+        if (status != 0) {
+            switch (event->response_type) {
+            case XCB_NONE:
+                handle_error((xcb_generic_error_t*) event);
+                break;
+
+            /* if the managing window is destroyed, there must be a new owner of
+             * the selection, check if this is set to something
+             */
+            case XCB_DESTROY_NOTIFY: {
+                xcb_destroy_notify_event_t *notify;
+
+                notify = (xcb_destroy_notify_event_t*) event;
+                if (notify->window == owner) {
+                    /* check if there is no more owner */
+                    owner = get_selection_owner(display.wm_sn_atom);
+                    if (owner == XCB_NONE) {
+                        printf("taking over again\n");
+                        status = 1;
+                    }
+                }
+                break;
+            }
+
+            default:
+                printf("dormant event: %u\n", event->response_type);
+                /* TODO: Handle core X11 events */
+            }
+            status = 0;
+        }
+        free(event);
+    } while (status == 0);
+
+    timestamp = get_server_timestamp();
+    take_wm_manager_ownership(timestamp);
+}
+
+/* Handle losing a selection. */
+static void handle_selection_clear(xcb_selection_clear_event_t *event)
+{
+    /* property change events are needed to get the server timestamp
+     * listen for substructure notify events so that we get destroy
+     * notifications for manager windows
+     * TODO: listening for structure notify events is unused
+     */
+    const uint32_t root_mask = XCB_CW_EVENT_MASK;
+    const uint32_t root_attributes[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE |
+            XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+            XCB_EVENT_MASK_STRUCTURE_NOTIFY
+    };
+    xcb_window_t new_owner;
+
+    if (event->owner == display.wm_manager_window &&
+            event->selection == display.wm_sn_atom) {
+        xcb_change_window_attributes(display.xcb, display.root,
+                root_mask, root_attributes);
+        xcb_destroy_window(display.xcb, display.wm_manager_window);
+
+        /* get the new owner */
+        new_owner = get_selection_owner(display.wm_sn_atom);
+        go_dormant_and_wait_for_selection(new_owner);
+    }
 }
 
 /* Handle incoming events on the X11 connection. */
@@ -413,6 +554,10 @@ void handle_server_events(void)
 
             case XCB_MAP_REQUEST:
                 handle_map_request((xcb_map_request_event_t*) event);
+                break;
+
+            case XCB_SELECTION_CLEAR:
+                handle_selection_clear((xcb_selection_clear_event_t*) event);
                 break;
 
             default:
