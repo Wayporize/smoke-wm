@@ -377,6 +377,7 @@ static void take_wm_manager_ownership(xcb_timestamp_t timestamp)
 
     xcb_change_window_attributes(display.xcb, display.root,
             managed_root_mask, managed_root_attributes);
+    /* associated to a few manager tests */
     printf("taking over\n");
 }
 
@@ -460,6 +461,7 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
     int status;
     xcb_timestamp_t timestamp;
 
+    /* associated to a few manager tests */
     printf("going dormant\n");
     do {
         /* flush so all requests are sent out before the next iteration */
@@ -485,6 +487,7 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
                     /* check if there is no more owner */
                     owner = get_selection_owner(display.wm_sn_atom);
                     if (owner == XCB_NONE) {
+                        /* associated to a few manager tests */
                         printf("taking over again\n");
                         status = 1;
                     }
@@ -519,12 +522,15 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
             XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
+
     xcb_window_t new_owner;
 
     if (event->owner == display.wm_manager_window &&
             event->selection == display.wm_sn_atom) {
         xcb_change_window_attributes(display.xcb, display.root,
                 root_mask, root_attributes);
+
+        /* destroy the manager window as required by ICCCM */
         xcb_destroy_window(display.xcb, display.wm_manager_window);
 
         /* get the new owner */

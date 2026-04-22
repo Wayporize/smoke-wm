@@ -2,10 +2,6 @@
 
 set -e
 
-run=./build/smoke-wm
-
-make "$run"
-
 # Create a temporary directory and clean it up at exit
 temp="$(mktemp -d /tmp/bindings.XXXXXX)"
 
@@ -32,7 +28,7 @@ for f in tests/toml/valid/*.toml ; do
         elif [ "$line" = "$success" ] ; then
             break
         fi
-    done < <(XDG_CONFIG_HOME="$temp" "$run")
+    done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
 done
 
 for f in tests/toml/invalid/*.toml ; do
@@ -47,6 +43,6 @@ for f in tests/toml/invalid/*.toml ; do
             echo "test failed on '$f'"
             exit 1
         fi
-    done < <(XDG_CONFIG_HOME="$temp" "$run")
+    done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
 done
 

@@ -2,10 +2,6 @@
 
 set -e
 
-run=./build/smoke-wm
-
-make "$run"
-
 # Create a temporary directory and clean it up at exit
 temp="$(mktemp -d /tmp/configuration.XXXXXX)"
 
@@ -46,7 +42,7 @@ for f in tests/toml/valid/*.toml ; do
         echo "$line" >> "$result"
     done
 
-    } < <(XDG_CONFIG_HOME="$temp" "$run")
+    } < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
 
     # Compare the actually received with the expected output
     if ! cmp -s "$result" "$output" ; then

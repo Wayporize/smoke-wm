@@ -2,27 +2,48 @@
 
 set -e
 
+original_display="$DISPLAY"
 test_display="8"
-
-# Run test X server and kill it at script exit
-Xephyr ":$test_display" 2>/dev/null &
-xephyr_pid="$!"
-
-# Wait until the X server has started
-while [ ! -S "/tmp/.X11-unix/X$test_display" ] ; do
-    sleep 0.1
-done
-
-# Install exit handler
-at_exit() {
-    kill -9 "$xephyr_pid"
-}
-trap at_exit INT EXIT
 
 # Let called scripts pick up the new DISPLAY value
 export DISPLAY=":$test_display"
+export SMOKE_WM="./build/smoke-wm"
+
+make "$SMOKE_WM"
+
+# Install exit handler
+xephyr_pid=""
+at_exit() {
+    set +e
+    if [ -n "$xephyr_pid" ] ; then
+        kill -s INT "$xephyr_pid" 2>/dev/null
+    fi
+}
+trap at_exit INT EXIT
 
 # Run all tests
-for f in usage home toml configuration configuration-path binding replace-manager ; do
-    "./tests/$f.sh" && echo "$f tests succeeded"
+for f in ./tests/[0-9][0-9]*.sh ; do
+    # Run test X server for each test
+    DISPLAY="$original_display" Xephyr ":$test_display" 2>/dev/null &
+    xephyr_pid="$!"
+
+    # Wait until the X server has started
+    while [ ! -S "/tmp/.X11-unix/X$test_display" ] ; do
+        sleep 0.05
+    done
+
+    name="$(basename "$f" .sh)"
+    if "$f" ; then
+        echo "$name succeeded"
+    else
+        echo "$name failed"
+        exit 1
+    fi
+
+    kill -s INT "$xephyr_pid"
+
+    # Wait until the X server has stopped
+    while [ -S "/tmp/.X11-unix/X$test_display" ] ; do
+        sleep 0.05
+    done
 done
