@@ -129,8 +129,8 @@ int main(int argc, char **argv)
     printf("end of dumping bindings\n");
 #endif
 
-    /* become the active window manager */
-    take_wm_control();
+    /* try to become the active window manager */
+    take_wm_ownership();
 
     /* receive all events by the server and handle them */
     handle_server_events();
