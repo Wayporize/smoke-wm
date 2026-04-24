@@ -39,6 +39,8 @@ struct wm Configuration_default = {
 
 #ifdef DEBUG
 
+/* Print the given color as four lines to stdout and prefix each with @prefix.
+ */
 static void print_color(const char *prefix, xcb_render_color_t *color)
 {
     printf("%s.red = 0x%04x\n", prefix, color->red);
@@ -47,6 +49,7 @@ static void print_color(const char *prefix, xcb_render_color_t *color)
     printf("%s.alpha = 0x%04x\n", prefix, color->alpha);
 }
 
+/* Print a border in multiple lines to stdout. */
 static void print_border(struct wm_border *border)
 {
     printf("border.size = %d\n", border->size);
@@ -67,6 +70,7 @@ static void print_border(struct wm_border *border)
     print_color("border.color.tiling", &border->color.tiling);
 }
 
+/* Print a layout constant to stdout. */
 static void print_layout(enum tiling_layout layout)
 {
     printf("layout = ");
@@ -93,6 +97,7 @@ void debug_dump_configuration(struct wm *wm)
     for (int i = 0; i < 4; i++) {
         printf("tiling.gaps.outer[%d] = %d\n", i, wm->tiling.gaps.outer[i]);
     }
+
     print_border(&wm->border);
 
     for (size_t i = 0; i < wm->monitor_length; i++) {
@@ -100,6 +105,7 @@ void debug_dump_configuration(struct wm *wm)
         printf("name = %s\n", wm->monitor[i].name);
         print_layout(wm->monitor[i].layout);
     }
+
     for (size_t i = 0; i < wm->workspace_length; i++) {
         printf("[[WORKSPACE]]\n");
         printf("name = %s\n", wm->workspace[i].name);
@@ -107,6 +113,7 @@ void debug_dump_configuration(struct wm *wm)
         printf("monitor = %s\n", wm->workspace[i].monitor);
         print_layout(wm->workspace[i].layout);
     }
+
     for (size_t i = 0; i < wm->window_length; i++) {
         printf("[[WINDOW]]\n");
         printf("name = %s\n", wm->window[i].name);
@@ -125,6 +132,7 @@ void debug_dump_configuration(struct wm *wm)
         printf("\n");
         print_border(&wm->window[i].border);
     }
+
     for (size_t i = 0; i < wm->binding_length; i++) {
         printf("[[BINDING]]\n");
         printf("release = %d\n", wm->binding[i].is_release);
@@ -135,6 +143,7 @@ void debug_dump_configuration(struct wm *wm)
         printf("button = %u\n", wm->binding[i].button);
         printf("TODO: action, value\n");
     }
+
     for (size_t i = 0; i < wm->startup_length; i++) {
         printf("[[STARTUP]]\n");
         printf("TODO: action, value\n");

@@ -233,8 +233,8 @@ static void handle_error(xcb_generic_error_t *error)
             error->resource_id == display.root &&
             error->major_code == XCB_CHANGE_WINDOW_ATTRIBUTES) {
         ABORT("Could not access root window.  "
-                "The running window manager is not complying to "
-                "ICCCM section 2.8.\n");
+                "The running window manager can not be taken over.  "
+                "Try to kill it manually.\n");
     }
     printf("error: %u\n", error->error_code);
 }
