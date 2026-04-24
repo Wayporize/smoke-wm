@@ -35,18 +35,18 @@ struct binding {
 static struct binding key_bindings[256 - 8][256 >> 1];
 
 /* Dynamic array of button bindings.  There is no compile time constant to tell
- * us a maximum value.  The second index is the adjust modifier like above.
+ * us a maximum value.  The second index is the adjusted modifiers like above.
  */
 static struct binding (*button_bindings)[256 >> 1];
 static unsigned button_bindings_length;
 
 /* Remove all ignored modifiers and the LOCK mask and shift the bits into the
- * lock mask.
+ * LOCK mask.
  */
 static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
 {
-    xkb_mod_mask_t saved_bits;
-    unsigned ignore_modifiers = 0;
+    /* we ignore XCB_MOD_MASK_LOCK by default but also all bits above 0xff */
+    unsigned ignore_modifiers = (~0xff | XCB_MOD_MASK_LOCK);
 
     /* ignore NumLock and ScrollLock modifiers */
     ignore_modifiers |= xkb_keymap_mod_get_mask(display.keymap,
@@ -55,16 +55,19 @@ static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
             XKB_VMOD_NAME_SCROLL);
     modifiers &= ~ignore_modifiers;
 
-    /* get rid of the LOCK mask by shifting above bits into it */
-    saved_bits = (modifiers & (XCB_MOD_MASK_LOCK - 1));
-    modifiers >>= 1;
-    modifiers |= saved_bits;
-    modifiers &= 127;
+    /* get rid of the LOCK mask by combining the bits below and above */
+    modifiers = ((modifiers & (XCB_MOD_MASK_LOCK - 1)) |
+            ((modifiers & ~(XCB_MOD_MASK_LOCK - 1)) >> 1));
 
     return modifiers;
 }
 
 #ifdef DEBUG
+
+/* Create a gap in the bits @modifiers at the LOCK mask. */
+#define DEBUG_REVERSE_ADJUST(modifiers) \
+    ((modifiers & (XCB_MOD_MASK_LOCK - 1)) | \
+            ((modifiers & ~(XCB_MOD_MASK_LOCK - 1)) << 1))
 
 /* Dump all bindings created to `stdout`. */
 void debug_dump_bindings(void)
@@ -75,12 +78,10 @@ void debug_dump_bindings(void)
         for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
             if (binding->press_actions != NULL) {
-                printf("KP %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, kc + 8);
+                printf("KP %u %u\n", DEBUG_REVERSE_ADJUST(m), kc + 8);
             }
             if (binding->release_actions != NULL) {
-                printf("KR %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, kc + 8);
+                printf("KR %u %u\n", DEBUG_REVERSE_ADJUST(m), kc + 8);
             }
         }
     }
@@ -89,12 +90,10 @@ void debug_dump_bindings(void)
         for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
             binding = &button_bindings[b][m];
             if (binding->press_actions != NULL) {
-                printf("BP %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, b);
+                printf("BP %u %u\n", DEBUG_REVERSE_ADJUST(m), b);
             }
             if (binding->release_actions != NULL) {
-                printf("BR %u %u\n",
-                        ((m << 1) | (m & 1)) & ~XCB_MOD_MASK_LOCK, b);
+                printf("BR %u %u\n", DEBUG_REVERSE_ADJUST(m), b);
             }
         }
     }
