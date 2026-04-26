@@ -73,9 +73,9 @@ at_exit() {
 }
 
 # Wait for either manager to take over
-if wait_for_line "$fifo1" "taking over again" ; then
+if wait_for_line "$fifo1" "taking over" ; then
     n=1
-elif wait_for_line "$fifo2" "taking over again" ; then
+elif wait_for_line "$fifo2" "taking over" ; then
     n=2
 else
     exit 1
@@ -99,4 +99,4 @@ else
 fi
 
 # Wait for the not killed manager to take over
-wait_for_line "$fifo" "taking over again"
+wait_for_line "$fifo" "taking over"

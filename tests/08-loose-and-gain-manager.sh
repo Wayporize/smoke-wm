@@ -47,4 +47,4 @@ wait_for_line "going dormant"
 # Kill i3 and then see if we take over again
 kill "$i3_pid"
 
-wait_for_line "taking over again"
+wait_for_line "taking over"

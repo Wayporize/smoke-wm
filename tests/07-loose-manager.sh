@@ -14,7 +14,7 @@ at_exit() {
 trap at_exit INT EXIT
 
 # Start smoke-wm
-XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" 2>/dev/null &
+XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" &
 smoke_wm_pid="$!"
 at_exit() {
     rm "$fifo"

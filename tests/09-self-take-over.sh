@@ -62,4 +62,4 @@ at_exit() {
 }
 
 # Wait for the first one to take over again
-wait_for_line "$fifo1" "taking over again"
+wait_for_line "$fifo1" "taking over"
