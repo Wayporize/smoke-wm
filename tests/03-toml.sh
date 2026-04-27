@@ -22,6 +22,7 @@ for f in tests/toml/valid/*.toml ; do
 
     # Try to find a parsing configuration status line
     while read -r line ; do
+        line="${line#\[*\] }"
         if [ "$line" = "$failure" ] ; then
             echo "test failed on '$f'"
             exit 1
@@ -37,6 +38,7 @@ for f in tests/toml/invalid/*.toml ; do
 
     # Try to find a parsing configuration status line
     while read -r line ; do
+        line="${line#\[*\] }"
         if [ "$line" = "$failure" ] ; then
             break
         elif [ "$line" = "$success" ] ; then

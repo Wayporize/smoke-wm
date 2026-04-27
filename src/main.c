@@ -6,6 +6,7 @@
 
 #include <pwd.h>
 #include <sys/types.h>
+#include <utility/log.h>
 #include <utility/utility.h>
 
 #include "binding.h"
@@ -45,6 +46,7 @@ int main(int argc, char **argv)
     const char *home;
     struct passwd *passwd;
     char *path;
+    enum wm_ownership_status status;
 
     (void) setlocale(LC_ALL, "");
 
@@ -72,29 +74,26 @@ int main(int argc, char **argv)
 
     /* get the user id and refuse to run as root */
     user_id = getuid();
-    if (user_id == 0) {
-        printf("smoke-wm is not allowed to be run as root user\n");
-        exit(EXIT_FAILURE);
-    }
+    ASSERT(user_id != 0, "smoke-wm is not allowed to be run as root user\n");
 
     /* get the home directory through HOME or fall back to the passwd entry */
     home = getenv("HOME");
     if (home == NULL || home[0] == '\0') {
         passwd = getpwuid(user_id);
         user_home = xstrdup(passwd->pw_dir);
-        printf("HOME not set, falling back to passwd entry: %s\n",
+        notef("HOME not set, falling back to passwd entry: %s\n",
                 passwd->pw_dir);
     } else {
         user_home = xstrdup(home);
     }
 
     /* associated to test tests/home.sh */
-    printf("user home: %s\n", user_home);
+    notef("user home: %s\n", user_home);
 
     path = get_configuration_path();
 
     /* associated to test tests/configuration-path.sh */
-    printf("configuration path: %s\n", path);
+    notef("configuration path: %s\n", path);
 
     open_display();
 
@@ -102,35 +101,38 @@ int main(int argc, char **argv)
     if (path != NULL) {
         if (parse_toml_configuration(path, &Configuration) == 0) {
             /* associated to test tests/toml.sh */
-            printf("parsing configuration succeeded\n");
+            notef("parsing configuration succeeded\n");
             set_configuration_bindings(&Configuration);
         } else {
             /* associated to test tests/toml.sh */
-            printf("parsing configuration failed\n");
+            notef("parsing configuration failed\n");
             Configuration = Configuration_default;
             /* TODO: set default bindings */
         }
         free(path);
     } else {
-        printf("no configuration, using default\n");
+        notef("no configuration, using default\n");
         Configuration = Configuration_default;
         /* TODO: set default bindings */
     }
 
 #ifdef DEBUG
     /* associated to test tests/configuration.sh */
-    printf("start of dumping configuration\n");
+    notef("start of dumping configuration\n");
     debug_dump_configuration(&Configuration);
-    printf("end of dumping configuration\n");
+    notef("end of dumping configuration\n");
 
     /* associated to test tests/bindings.sh */
-    printf("start of dumping bindings\n");
+    notef("start of dumping bindings\n");
     debug_dump_bindings();
-    printf("end of dumping bindings\n");
+    notef("end of dumping bindings\n");
 #endif
 
     /* try to become the active window manager */
-    take_wm_ownership();
+    status = take_wm_ownership();
+    if (status != WM_OWNERSHIP_SUCCESS) {
+        ABORT("could not become the window manager\n");
+    }
 
     /* receive all events by the server and handle them */
     handle_server_events();

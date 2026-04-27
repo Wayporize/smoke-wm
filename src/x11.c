@@ -1,5 +1,8 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <utility/log.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
@@ -229,14 +232,7 @@ void open_display(void)
 /* Handle an error that occured. */
 static void handle_error(xcb_generic_error_t *error)
 {
-    if (error->error_code == XCB_ACCESS &&
-            error->resource_id == display.root &&
-            error->major_code == XCB_CHANGE_WINDOW_ATTRIBUTES) {
-        ABORT("Could not access root window.  "
-                "The running window manager can not be taken over.  "
-                "Try to kill it manually.\n");
-    }
-    printf("error: %u\n", error->error_code);
+    notef("error: %u\n", error->error_code);
 }
 
 /* Handle an event by the xkb extension. */
@@ -250,7 +246,7 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
         switch (event->xkbType) {
         case XCB_XKB_NEW_KEYBOARD_NOTIFY:
         case XCB_XKB_MAP_NOTIFY:
-            printf("xkb: mapping changed\n");
+            notef("xkb: mapping changed\n");
             refresh_keyboard_mapping();
             clear_bindings();
             set_configuration_bindings(&Configuration);
@@ -262,7 +258,7 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
                     event->baseMods, event->latchedMods, event->lockedMods,
                     event->baseGroup, event->latchedGroup, event->lockedGroup);
             if ((change & XKB_STATE_LAYOUT_EFFECTIVE)) {
-                printf("xkb: layout changed\n");
+                notef("xkb: layout changed\n");
                 /* layout has changed, simply re-create the bindings with the new
                  * layout in the keyboard state
                  */
@@ -386,8 +382,55 @@ static xcb_window_t change_selection_owner_event_mask_to_destruction(
     return owner;
 }
 
-/* Forward declaration. */
-static void go_dormant_and_wait_for_selection(xcb_window_t owner);
+/* Wait until the given window was destroyed for up to 5 seconds. */
+static int wait_for_destroy_notification(xcb_window_t window)
+{
+    int file_descriptor;
+    struct timeval timeout;
+    bool is_destroy_notification_received = false;
+    fd_set read_set;
+    int return_value;
+    xcb_generic_event_t *event;
+
+    file_descriptor = xcb_get_file_descriptor(display.xcb);
+
+    /* wait for up to 5 seconds */
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    while (!is_destroy_notification_received) {
+        FD_ZERO(&read_set);
+        FD_SET(file_descriptor, &read_set);
+        return_value = select(file_descriptor + 1, &read_set,
+                NULL, NULL, &timeout);
+        if (return_value <= 0) {
+            break;
+        }
+
+        /* read all received events (might be none) */
+        while (event = xcb_poll_for_event(display.xcb), event != NULL) {
+            if (handle_extension_event(event) != 0) {
+                if (event->response_type == XCB_DESTROY_NOTIFY &&
+                        ((xcb_destroy_notify_event_t*) event)->window ==
+                            window) {
+                    notef("...success\n");
+                    free(event);
+                    is_destroy_notification_received = true;
+                    break;
+                }
+            }
+            free(event);
+        }
+    }
+
+    if (!is_destroy_notification_received) {
+        notef("...failed: timeout\n");
+        return_value = 1;
+    } else {
+        return_value = 0;
+    }
+
+    return return_value;
+}
 
 /* Try to become the window manager on the current X11 connection.
  *
@@ -395,25 +438,28 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner);
  * `SubstructureRedirect` event mask on the root window to redirect certain
  * events for window management.
  */
-void take_wm_ownership(void)
+enum wm_ownership_status take_wm_ownership(void)
 {
     xcb_timestamp_t timestamp;
     xcb_window_t owner, previous_owner;
+    enum wm_ownership_status status = WM_OWNERSHIP_SUCCESS;
 
     const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
     const uint32_t managed_root_attributes[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE |
         XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
             XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
     };
-    xcb_generic_event_t *event;
     xcb_client_message_event_t message;
+    xcb_void_cookie_t cookie;
+    xcb_generic_error_t *error;
 
     /* create specific manager window as per ICCCM */
     display.wm_sn_window = xcb_generate_id(display.xcb);
     xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT,
             display.wm_sn_window, display.root, -1, -1, 1, 1, 0,
             XCB_WINDOW_CLASS_INPUT_ONLY, XCB_COPY_FROM_PARENT, 0, NULL);
-    printf("created selection window %#x\n", display.wm_sn_window);
+    notef("created selection window %#x\n", display.wm_sn_window);
 
     previous_owner = get_selection_owner(display.wm_sn_atom);
     previous_owner = change_selection_owner_event_mask_to_destruction(
@@ -423,65 +469,87 @@ void take_wm_ownership(void)
     xcb_set_selection_owner(display.xcb, display.wm_sn_window,
             display.wm_sn_atom, timestamp);
 
+    /* make sure our selection owner request goes out */
+    xcb_flush(display.xcb);
+
+    notef("sent request to become the selection owner\n");
+
     /* wait until the previous owner destroys its owner window which means
      * (as specified in ICCCM 2.8) that we can now select for substructure
      * redirect events on the root window
      */
-    if (previous_owner != XCB_NONE) {
-        printf("waiting until the old manager destroys window %#x...\n",
-                previous_owner);
-        while (true) {
-            xcb_flush(display.xcb);
-            event = xcb_wait_for_event(display.xcb);
-            if (handle_extension_event(event) != 0) {
-                if (event->response_type == XCB_DESTROY_NOTIFY &&
-                        ((xcb_destroy_notify_event_t*) event)->window ==
-                            previous_owner) {
-                    printf("...success\n");
-                    free(event);
-                    break;
+    if (previous_owner == XCB_NONE || (
+            notef("waiting until the old manager destroys window %#x...\n",
+                previous_owner),
+            wait_for_destroy_notification(previous_owner) == 0)) {
+        /* at this point, the owner might have already changed again */
+        owner = get_selection_owner(display.wm_sn_atom);
+        if (owner != display.wm_sn_window) {
+            notef("a third manager interferred, can not take over\n");
+            /* destroy the manager window to indicate to the interferring
+             * manager that they are good to go
+             */
+            xcb_destroy_window(display.xcb, display.wm_sn_window);
+            display.wm_sn_window = XCB_NONE;
+
+            status = WM_OWNERSHIP_INTERFERRED;
+        } else {
+            /* send out a client message to announce that we are the new owner
+             */
+            message.response_type = XCB_CLIENT_MESSAGE;
+            message.window = display.root;
+            message.format = 32;
+            message.type = display.manager_atom;
+            message.data.data32[0] = timestamp;
+            message.data.data32[1] = display.wm_sn_atom;
+            message.data.data32[2] = display.wm_sn_window;
+            xcb_send_event(display.xcb, false, display.root,
+                    XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) &message);
+
+            /* redirect events to our window manager */
+            cookie = xcb_change_window_attributes_checked(display.xcb,
+                    display.root, managed_root_mask, managed_root_attributes);
+            error = xcb_request_check(display.xcb, cookie);
+            /* check for an error which can occur yet again because another
+             * manager interferred
+             */
+            if (error != NULL) {
+                if (error->error_code != XCB_ACCESS) {
+                    ABORT("Could not change window attributes on the root window\n");
                 }
+                free(error);
+
+                owner = get_selection_owner(display.wm_sn_atom);
+                if (owner != XCB_NONE) {
+                    /* a (maybe) ICCCM compliant manager stole away the mask
+                     * while we were both selecting the owner at the same time
+                     * so this was not spotted earlier
+                     */
+                    notef("a third manager interferred, can not select event mask\n");
+                    status = WM_OWNERSHIP_INTERFERRED;
+                } else {
+                    /* someone has the mask but there is no owner */
+                    notef("a non-ICCCM-compliant manager is present, can not overrule\n");
+                    status = WM_OWNERSHIP_NONCOMPLIANT;
+                }
+
+                /* destroy the window again */
+                xcb_destroy_window(display.xcb, display.wm_sn_window);
+                display.wm_sn_window = XCB_NONE;
+            } else {
+                /* associated to a few manager tests */
+                notef("taking over\n");
             }
-            free(event);
         }
     }
 
-    /* at this point, the owner might have already changed again */
-    owner = get_selection_owner(display.wm_sn_atom);
-
-    if (owner != display.wm_sn_window) {
-        printf("3rd manager interferred, can not take over\n");
-        /* destroy the manager window to indicate to the interferring manager
-         * that they are good to go
-         */
-        xcb_destroy_window(display.xcb, display.wm_sn_window);
-
-        go_dormant_and_wait_for_selection(owner);
-    } else {
-        /* send out a client message to announce that we are the new owner */
-        message.response_type = XCB_CLIENT_MESSAGE;
-        message.window = display.root;
-        message.format = 32;
-        message.type = display.manager_atom;
-        message.data.data32[0] = timestamp;
-        message.data.data32[1] = display.wm_sn_atom;
-        message.data.data32[2] = display.wm_sn_window;
-        xcb_send_event(display.xcb, false, display.root,
-                XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) &message);
-
-        /* redirect events to our window manager */
-        xcb_change_window_attributes(display.xcb, display.root,
-                managed_root_mask, managed_root_attributes);
-
-        /* associated to a few manager tests */
-        printf("taking over\n");
-    }
+    return status;
 }
 
 /* Handle a map request issued when a client called MapWindow. */
 static void handle_map_request(xcb_map_request_event_t *event)
 {
-    printf("got map request: 0x%x\n", event->window);
+    notef("got map request: 0x%x\n", event->window);
     xcb_map_window(display.xcb, event->window);
 }
 
@@ -498,7 +566,7 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
     xcb_destroy_notify_event_t *notify;
 
     /* associated to a few manager tests */
-    printf("going dormant\n");
+    notef("going dormant\n");
 
     /* listen for destory notifications on the current owner */
     owner = change_selection_owner_event_mask_to_destruction(owner,
@@ -526,8 +594,6 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
         }
         free(event);
     }
-
-    take_wm_ownership();
 }
 
 /* Handle losing a selection. */
@@ -538,6 +604,7 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
     const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
 
     xcb_window_t new_owner;
+    enum wm_ownership_status status;
 
     if (event->owner == display.wm_sn_window &&
             event->selection == display.wm_sn_atom) {
@@ -546,10 +613,20 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
 
         /* destroy the manager window as required by ICCCM */
         xcb_destroy_window(display.xcb, display.wm_sn_window);
+        display.wm_sn_window = XCB_NONE;
 
-        /* get the new owner and go dormant */
-        new_owner = get_selection_owner(display.wm_sn_atom);
-        go_dormant_and_wait_for_selection(new_owner);
+        do {
+            /* get the new owner and go dormant */
+            new_owner = get_selection_owner(display.wm_sn_atom);
+            go_dormant_and_wait_for_selection(new_owner);
+            notef("waking up\n");
+
+            status = take_wm_ownership();
+            if (status == WM_OWNERSHIP_NONCOMPLIANT) {
+                /* add a small delay to not spam the user */
+                sleep(1);
+            }
+        } while (status != WM_OWNERSHIP_SUCCESS);
     }
 }
 
@@ -577,7 +654,7 @@ void handle_server_events(void)
                 break;
 
             default:
-                printf("event: %u\n", event->response_type);
+                notef("event: %u\n", event->response_type);
                 /* TODO: Handle more core X11 events */
             }
             status = 0;

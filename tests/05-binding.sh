@@ -142,6 +142,7 @@ done
 {
 # Get to the first line of the binding dump
 while read -r line ; do
+    line="${line#\[*\] }"
     if [ "$line" = "start of dumping bindings" ] ; then
         break
     fi
@@ -149,6 +150,7 @@ done
 
 # Go through all lines of the bindings dump
 while read -r line ; do
+    line="${line#\[*\] }"
     # Check for end signal
     if [ "$line" = "end of dumping bindings" ] ; then
         break

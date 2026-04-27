@@ -5,8 +5,8 @@ set -e
 check_home() {
     while read -r line ; do
         case "$line" in
-        'user home: '*)
-            if [ "${line#user home: }" != "$2" ] ; then
+        \[*\]\ 'user home: '*)
+            if [ "${line#\[*\] user home: }" != "$2" ] ; then
                 echo "home is not $2"
                 return 1
             fi

@@ -20,6 +20,7 @@ at_exit() {
 
 wait_for_line() {
     while read -t 4 -r line ; do
+        line="${line#\[*\] }"
         if [ "$line" = "$2" ] ; then
             return 0
         fi

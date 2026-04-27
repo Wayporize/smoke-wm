@@ -5,8 +5,8 @@ set -e
 check_configuration_path() {
     while read -r line ; do
         case "$line" in
-        'configuration path: '*)
-            if [ "${line#configuration path: }" != "$3" ] ; then
+        \[*\]\ 'configuration path: '*)
+            if [ "${line#\[*\] configuration path: }" != "$3" ] ; then
                 echo "configuration path is not $3"
                 echo XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2"
                 return 1

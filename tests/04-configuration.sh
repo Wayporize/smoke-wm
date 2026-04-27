@@ -24,6 +24,7 @@ for f in tests/toml/valid/*.toml ; do
     {
     # Get to the first line of the configuration dump
     while read -r line ; do
+        line="${line#\[*\] }"
         if [ "$line" = "start of dumping configuration" ] ; then
             break
         fi
@@ -34,6 +35,7 @@ for f in tests/toml/valid/*.toml ; do
 
     # Go through all lines of the configuration dump
     while read -r line ; do
+        line="${line#\[*\] }"
         # Check for end signal
         if [ "$line" = "end of dumping configuration" ] ; then
             break

@@ -14,6 +14,7 @@ sleep 1
 
 # try to take over and try to read a map request
 while read -t 2 -r line ; do
+    line="${line#\[*\] }"
     if [ "$line" = "taking over" ] ; then
         "$TERMINAL" 2>/dev/null &
     fi

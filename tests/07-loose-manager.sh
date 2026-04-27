@@ -23,6 +23,7 @@ at_exit() {
 
 wait_for_line() {
     while read -t 4 -r line ; do
+        line="${line#\[*\] }"
         if [ "$line" = "$1" ] ; then
             return 0
         fi

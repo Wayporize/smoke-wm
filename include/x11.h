@@ -42,11 +42,29 @@ extern struct display display;
  */
 void open_display(void);
 
+enum wm_ownership_status {
+    /* no problem occured acquiring the `WM_Sn` selection and setting up the
+     * root event mask
+     */
+    WM_OWNERSHIP_SUCCESS,
+    /* another manager interferred in acquiring the selection or setting up the
+     * event mask
+     */
+    WM_OWNERSHIP_INTERFERRED,
+    /* the present manager does not use `WM_sn`, there is nothing to do besides
+     * waiting that this manager stops managing on its own
+     */
+    WM_OWNERSHIP_NONCOMPLIANT,
+    /* the existing window manager took too long to destroy the manager window
+     */
+    WM_OWNERSHIP_TIMEOUT,
+};
+
 /* Try to become the window manager on the current X11 connection.
  *
  * If this fails, the program exits.
  */
-void take_wm_ownership(void);
+enum wm_ownership_status take_wm_ownership(void);
 
 /* Handle incoming events on the X11 connection.
  *
