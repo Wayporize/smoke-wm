@@ -2,22 +2,18 @@
 
 set -e
 
-run=./build/smoke-wm
-
-make "$run"
-
 check_configuration_path() {
     while read -r line ; do
         case "$line" in
-        'configuration path: '*)
-            if [ "${line#configuration path: }" != "$3" ] ; then
+        \[*\]\ 'configuration path: '*)
+            if [ "${line#\[*\] configuration path: }" != "$3" ] ; then
                 echo "configuration path is not $3"
                 echo XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2"
-                exit 1
+                return 1
             fi
             break
         esac
-    done < <(XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2" "$run")
+    done < <(XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2" "$SMOKE_WM" 2>/dev/null)
 }
 
 # Collect all files/directories we create and delete them at exit

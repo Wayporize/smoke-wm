@@ -2,10 +2,6 @@
 
 set -e
 
-run=./build/smoke-wm
-
-make "$run"
-
 # Create a temporary directory and clean it up at exit
 temp="$(mktemp -d /tmp/bindings.XXXXXX)"
 
@@ -146,6 +142,7 @@ done
 {
 # Get to the first line of the binding dump
 while read -r line ; do
+    line="${line#\[*\] }"
     if [ "$line" = "start of dumping bindings" ] ; then
         break
     fi
@@ -153,6 +150,7 @@ done
 
 # Go through all lines of the bindings dump
 while read -r line ; do
+    line="${line#\[*\] }"
     # Check for end signal
     if [ "$line" = "end of dumping bindings" ] ; then
         break
@@ -200,7 +198,7 @@ while read -r line ; do
     done
     hard_bindings=("${new_hard_bindings[@]}")
 done
-} < <(XDG_CONFIG_HOME="$temp" "$run")
+} < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
 
 # If there is a bug in the test or not enough bindings printed
 if ! [ "${#hard_bindings[@]}" -eq 0 ] ; then

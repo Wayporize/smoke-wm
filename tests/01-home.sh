@@ -2,21 +2,17 @@
 
 set -e
 
-run=./build/smoke-wm
-
-make "$run"
-
 check_home() {
     while read -r line ; do
         case "$line" in
-        'user home: '*)
-            if [ "${line#user home: }" != "$2" ] ; then
+        \[*\]\ 'user home: '*)
+            if [ "${line#\[*\] user home: }" != "$2" ] ; then
                 echo "home is not $2"
-                exit 1
+                return 1
             fi
             break
         esac
-    done < <(HOME="$1" "$run")
+    done < <(HOME="$1" "$SMOKE_WM" 2>/dev/null)
 }
 
 # Check a few names, they must match

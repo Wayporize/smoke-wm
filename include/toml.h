@@ -73,9 +73,6 @@ void read_integer(struct toml_parse_context *context);
 /* Read a boolean (true or false) and put it into @context->number. */
 void read_boolean(struct toml_parse_context *context);
 
-/* Parse keys within the root of the TOML document. */
-void parse_root_key(struct toml_parse_context *context);
-
 /* Parse a table header [[?word(.word)*]?] and move into the table. */
 void parse_table_header(struct toml_parse_context *context);
 
@@ -90,7 +87,12 @@ void parse_table_header(struct toml_parse_context *context);
  */
 void parse_table(struct toml_parse_context *context, bool is_inline);
 
-/* Parse the configuration in the TOML format. */
+/* Parse the configuration in the TOML format.
+ *
+ * @return 0 if the parsing succeed, otherwise non-zero.
+ *
+ * If non-zero is returned, the error has been printed to stdout.
+ */
 int parse_toml_configuration(const char *file_path, struct wm *wm);
 
 #endif
