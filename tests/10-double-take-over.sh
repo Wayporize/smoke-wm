@@ -74,7 +74,7 @@ at_exit() {
 }
 
 # Wait for either manager to take over
-if wait_for_line "$fifo1" "taking over" ; then
+if wait_for_line "$fifo1" "taking over" >/dev/null ; then
     n=1
 elif wait_for_line "$fifo2" "taking over" ; then
     n=2

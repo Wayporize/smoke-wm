@@ -250,6 +250,8 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
             refresh_keyboard_mapping();
             clear_bindings();
             set_configuration_bindings(&Configuration);
+            /* immediately send our requests */
+            xcb_flush(display.xcb);
             break;
 
         case XCB_XKB_STATE_NOTIFY:
@@ -264,6 +266,8 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
                  */
                 clear_bindings();
                 set_configuration_bindings(&Configuration);
+                /* immediately send our requests */
+                xcb_flush(display.xcb);
             }
             break;
         }
@@ -303,31 +307,31 @@ static xcb_timestamp_t get_server_timestamp(void)
 {
     xcb_generic_event_t *event;
     xcb_property_notify_event_t *notify;
-    xcb_timestamp_t timestamp;
+    int status;
+    xcb_timestamp_t timestamp = 0;
 
     /* cause a property notify event but do not change anything */
     xcb_change_property(display.xcb, XCB_PROP_MODE_APPEND, display.root,
             XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, 0, NULL);
+    /* flush out the request */
+    xcb_flush(display.xcb);
 
     /* get the timestamp from the property notify event */
-    while (true) {
-        xcb_flush(display.xcb);
-        event = xcb_wait_for_event(display.xcb);
-        if (handle_extension_event(event) != 0) {
-            if (event->response_type == XCB_PROPERTY_NOTIFY) {
-                notify = (xcb_property_notify_event_t*) event;
-                /* TODO: for now this can only be from the root, make sure to
-                 * properly handle the case where property notify events can
-                 * come in from other sources
-                 */
-                if (notify->atom == XCB_ATOM_WM_NAME &&
-                        notify->state == XCB_PROPERTY_NEW_VALUE) {
-                    /* got the property notify event we were looking for */
-                    timestamp = notify->time;
-                    free(event);
-                    break;
-                }
-            }
+    while (event = xcb_wait_for_event(display.xcb), event != NULL) {
+        notify = (xcb_property_notify_event_t*) event;
+        status = handle_extension_event(event);
+        /* TODO: for now this can only be from the root, make sure to
+         * properly handle the case where property notify events can
+         * come in from other sources
+         */
+        if (status != 0 &&
+                notify->response_type == XCB_PROPERTY_NOTIFY &&
+                notify->atom == XCB_ATOM_WM_NAME &&
+                notify->state == XCB_PROPERTY_NEW_VALUE) {
+            /* got the property notify event we were looking for */
+            timestamp = notify->time;
+            free(event);
+            break;
         }
         free(event);
     }
@@ -391,6 +395,8 @@ static int wait_for_destroy_notification(xcb_window_t window)
     fd_set read_set;
     int return_value;
     xcb_generic_event_t *event;
+    xcb_destroy_notify_event_t *notify;
+    int status;
 
     file_descriptor = xcb_get_file_descriptor(display.xcb);
 
@@ -408,15 +414,15 @@ static int wait_for_destroy_notification(xcb_window_t window)
 
         /* read all received events (might be none) */
         while (event = xcb_poll_for_event(display.xcb), event != NULL) {
-            if (handle_extension_event(event) != 0) {
-                if (event->response_type == XCB_DESTROY_NOTIFY &&
-                        ((xcb_destroy_notify_event_t*) event)->window ==
-                            window) {
-                    notef("...success\n");
-                    free(event);
-                    is_destroy_notification_received = true;
-                    break;
-                }
+            notify = (xcb_destroy_notify_event_t*) event;
+            status = handle_extension_event(event);
+            if (status != 0 &&
+                    event->response_type == XCB_DESTROY_NOTIFY &&
+                    notify->window == window) {
+                notef("...success\n");
+                free(event);
+                is_destroy_notification_received = true;
+                break;
             }
             free(event);
         }
@@ -568,7 +574,7 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
     /* associated to a few manager tests */
     notef("going dormant\n");
 
-    /* listen for destory notifications on the current owner */
+    /* listen for destroy notifications on the current owner */
     owner = change_selection_owner_event_mask_to_destruction(owner,
             display.wm_sn_atom);
 
@@ -585,7 +591,8 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
         /* if the managing window is destroyed, there must be a new owner of
          * the selection
          */
-        if (status != 0 && notify->response_type == XCB_DESTROY_NOTIFY &&
+        if (status != 0 &&
+                notify->response_type == XCB_DESTROY_NOTIFY &&
                 notify->window == owner) {
             /* get the new owner and listen for destroy notifications again */
             owner = get_selection_owner(display.wm_sn_atom);
