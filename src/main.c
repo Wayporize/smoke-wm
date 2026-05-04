@@ -11,8 +11,8 @@
 
 #include "binding.h"
 #include "configuration.h"
+#include "display.h"
 #include "toml.h"
-#include "x11.h"
 
 /* name of the executable argument used when running the program */
 char *program_name;

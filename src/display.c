@@ -9,7 +9,8 @@
 
 #include "binding.h"
 #include "configuration.h"
-#include "x11.h"
+#include "display.h"
+#include "window.h"
 
 /* the information retrieved from the X server and Xkb context */
 struct display display;
@@ -505,6 +506,7 @@ enum wm_ownership_status take_wm_ownership(void)
         };
         cookie = xcb_change_window_attributes_checked(display.xcb,
                 display.root, managed_root_mask, managed_root_attributes);
+        notef("sending request to change root event mask\n");
         error = xcb_request_check(display.xcb, cookie);
         /* check for an error which can occur yet again because another
          * manager interferred
@@ -543,13 +545,6 @@ enum wm_ownership_status take_wm_ownership(void)
     }
 
     return status;
-}
-
-/* Handle when a client requested to map a window. */
-static void handle_map_request(xcb_map_request_event_t *event)
-{
-    notef("got map request: 0x%x\n", event->window);
-    xcb_map_window(display.xcb, event->window);
 }
 
 /* Wait for the selection to become free again.
@@ -643,20 +638,43 @@ void handle_server_events(void)
         /* check for extension events */
         status = handle_extension_event(event);
         if (status != 0) {
+            status = 0;
+
             switch (event->response_type) {
+            case XCB_SELECTION_CLEAR:
+                handle_selection_clear((xcb_selection_clear_event_t*) event);
+                break;
+
+            case XCB_CREATE_NOTIFY:
+                create_window((xcb_create_notify_event_t*) event);
+                break;
+
+            case XCB_PROPERTY_NOTIFY:
+                change_property((xcb_property_notify_event_t*) event);
+                break;
+
+            case XCB_CONFIGURE_REQUEST:
+                handle_configure_request((xcb_configure_request_event_t*) event);
+                break;
+
             case XCB_MAP_REQUEST:
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
 
-            case XCB_SELECTION_CLEAR:
-                handle_selection_clear((xcb_selection_clear_event_t*) event);
+            case XCB_DESTROY_NOTIFY:
+                destroy_window((xcb_destroy_notify_event_t*) event);
+                break;
+
+            case XCB_MAP_NOTIFY:
+            case XCB_UNMAP_NOTIFY:
+            case XCB_CONFIGURE_NOTIFY:
+                /* ignore */
                 break;
 
             default:
                 notef("event: %u\n", event->response_type);
                 /* TODO: Handle more core X11 events */
             }
-            status = 0;
         }
         free(event);
     } while (status == 0);
