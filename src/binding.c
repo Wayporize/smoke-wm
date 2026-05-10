@@ -9,8 +9,8 @@
  * The binding arrays are optimized for fast lookups.
  */
 
+#include "display.h"
 #include "binding.h"
-#include "x11.h"
 
 /* if the binding should pass through to the underlying window */
 #define BINDING_TRANSPARENT 0x1

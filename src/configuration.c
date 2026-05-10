@@ -12,7 +12,7 @@
 
 #include "binding.h"
 #include "configuration.h"
-#include "x11.h"
+#include "display.h"
 
 /* the globally accessible configuration object */
 struct wm Configuration;

@@ -4,11 +4,9 @@ set -e
 
 # Create a temporary directory and clean it up at exit
 temp="$(mktemp -d /tmp/bindings.XXXXXX)"
-
 at_exit() {
     rm -rf "$temp"
 }
-
 trap at_exit INT EXIT
 
 mkdir "$temp/smoke-wm"

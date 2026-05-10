@@ -9,18 +9,20 @@ at_exit() {
 }
 trap at_exit INT EXIT
 
+RUN=./build/tests/windows/override_redirect
+
+mkdir -p build/tests/windows
+cc tests/windows/override_redirect.c -o "$RUN" -lX11
+
 # Create temporary fifo
 fifo="/tmp/$$.fifo"
 mkfifo "$fifo"
 exec 3<>"$fifo"
 
-XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" &
-smoke_wm_pid="$!"
-
 wait_for_line() {
     while read -t 4 -r line ; do
         line="${line#\[*\] }"
-        if [ "$line" = "$1" ] ; then
+        if [[ "$line" =~ $1 ]] ; then
             return 0
         fi
     done < "$fifo"
@@ -29,17 +31,15 @@ wait_for_line() {
     return 1
 }
 
-# Wait for smoke-wm to start
+"$SMOKE_WM" >"$fifo" &
 wait_for_line "taking over"
 
-# Replace the window manager with i3
-i3 --replace >/dev/null 2>/dev/null &
-i3_pid="$!"
+"$RUN" &
+run_pid="$!"
 
-# Wait until we become dormant
-wait_for_line "going dormant"
+wait_for_line "window (0x[0-9a-f]+) creation registered"
+window_id="${BASH_REMATCH[1]}"
 
-# Kill i3 and then see if we take over again
-kill "$i3_pid"
+kill "$run_pid"
 
-wait_for_line "taking over"
+wait_for_line "window $window_id destruction registered"

@@ -10,8 +10,8 @@
  * specific parsing while still using valid TOML values.
  */
 
+#include "display.h"
 #include "toml.h"
-#include "x11.h"
 
 /* append functions for table arrays */
 static void append_wm_monitor(struct toml_parse_context *context);
