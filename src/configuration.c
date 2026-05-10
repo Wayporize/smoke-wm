@@ -236,7 +236,7 @@ char *get_configuration_path(void)
 {
     const char *const config = "smoke-wm/config.toml";
     const char *xdg_config_home, *xdg_config_dirs;
-    char *path = NULL;
+    char *path;
     const char *colon;
     int length;
 
@@ -248,47 +248,44 @@ char *get_configuration_path(void)
     xdg_config_home = getenv("XDG_CONFIG_HOME");
     if (xdg_config_home != NULL && xdg_config_home[0] != '\0') {
         path = xasprintf("%s/%s", xdg_config_home, config);
-        if (!is_readable(path)) {
-            free(path);
-            path = NULL;
+        if (is_readable(path)) {
+            return path;
         }
+        free(path);
     }
 
-    if (path == NULL) {
-        xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
-        if (xdg_config_dirs != NULL && xdg_config_dirs[0] != '\0') {
-            do {
-                colon = strchr(xdg_config_dirs, ':');
-                if (colon != NULL) {
-                    length = colon - xdg_config_dirs;
-                } else {
-                    length = strlen(xdg_config_dirs);
-                }
-
-                path = xasprintf("%.*s/%s",
-                        length, xdg_config_dirs, config);
-                if (is_readable(path)) {
-                    break;
-                }
-                free(path);
-                path = NULL;
-
-                xdg_config_dirs = colon + 1;
-            } while (colon != NULL);
-        }
-    }
-
-    if (path == NULL) {
-        path = xasprintf("%s/.config/%s", user_home, config);
-        if (!is_readable(path)) {
-            free(path);
-            path = xasprintf("/etc/xdg/%s", config);
-            if (!is_readable(path)) {
-                free(path);
-                path = NULL;
+    xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
+    if (xdg_config_dirs != NULL && xdg_config_dirs[0] != '\0') {
+        do {
+            colon = strchr(xdg_config_dirs, ':');
+            if (colon != NULL) {
+                length = colon - xdg_config_dirs;
+            } else {
+                length = strlen(xdg_config_dirs);
             }
-        }
+
+            path = xasprintf("%.*s/%s",
+                    length, xdg_config_dirs, config);
+            if (is_readable(path)) {
+                return path;
+            }
+            free(path);
+
+            xdg_config_dirs = colon + 1;
+        } while (colon != NULL);
     }
 
-    return path;
+    path = xasprintf("%s/.config/%s", user_home, config);
+    if (is_readable(path)) {
+        return path;
+    }
+    free(path);
+
+    path = xasprintf("/etc/xdg/%s", config);
+    if (is_readable(path)) {
+        return path;
+    }
+    free(path);
+
+    return NULL;
 }

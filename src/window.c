@@ -12,14 +12,18 @@
 STATIC_LIST(struct window_cache, windows);
 
 /* Get a window cache by given X11 window id. */
-static struct window_cache *get_window_by_id(xcb_window_t id)
+struct window_cache *get_window_by_id(xcb_window_t id)
 {
+    static struct window_cache null_window;
+
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i].id == id) {
             return &windows[i];
         }
     }
-    ABORT("tried to get invalid window\n");
+
+    notef("error: window %#x is not cached\n", id);
+    return &null_window;
 }
 
 /* Create and register a new window from an X11 event. */
@@ -51,18 +55,18 @@ void change_property(xcb_property_notify_event_t *event)
 
     window = get_window_by_id(event->window);
 
-    if (event->atom == XCB_ATOM_WM_NORMAL_HINTS) {
-        xcb_discard_reply(display.xcb, window->wm_normal_hints.cookie.sequence);
-        free(window->wm_normal_hints.reply);
-        window->wm_normal_hints.reply = NULL;
-        window->wm_normal_hints.cookie =
-            xcb_icccm_get_wm_normal_hints(display.xcb, event->window);
-    } else if (event->atom == XCB_ATOM_WM_HINTS) {
-        xcb_discard_reply(display.xcb, window->wm_hints.cookie.sequence);
-        free(window->wm_hints.reply);
-        window->wm_hints.reply = NULL;
-        window->wm_hints.cookie = xcb_icccm_get_wm_hints(display.xcb, event->window);
+#define REINSTANTIATE(atom_name, variable_name, function_name) \
+    if (event->atom == atom_name) { \
+        xcb_discard_reply(display.xcb, window->variable_name.cookie.sequence); \
+        free(window->variable_name.reply); \
+        window->variable_name.reply = NULL; \
+        window->variable_name.cookie = function_name(display.xcb, event->window); \
     }
+
+    REINSTANTIATE(XCB_ATOM_WM_NORMAL_HINTS, wm_normal_hints, xcb_icccm_get_wm_normal_hints)
+    else REINSTANTIATE(XCB_ATOM_WM_HINTS, wm_hints, xcb_icccm_get_wm_hints)
+
+#undef REINSTANTIATE
 }
 
 /* Update a specific window property. */
