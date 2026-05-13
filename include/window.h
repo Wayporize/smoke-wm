@@ -1,3 +1,6 @@
+#ifndef WINDOW_H
+#define WINDOW_H
+
 #include <xcb/xcb_icccm.h>
 
 /* property pair */
@@ -22,12 +25,15 @@ struct window_cache {
     xcb_icccm_wm_state_t state;
 };
 
+/* Go through all windows that already exist and manage them. */
+void query_existing_windows(void);
+
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event);
 
 /* Change a property of a window.
  *
- * The new property value is just queue for retrieval but no roundtrip to the
+ * The new property value is just queued for retrieval but no roundtrip to the
  * server is issued to actually get the value, see `update_property()`.
  */
 void change_property(xcb_property_notify_event_t *event);
@@ -48,3 +54,5 @@ void handle_configure_request(xcb_configure_request_event_t *event);
 
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);
+
+#endif
