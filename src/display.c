@@ -1,19 +1,45 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/select.h>
 #include <unistd.h>
 #include <utility/log.h>
+
 #include <xcb/xkb.h>
+#include <xcb/randr.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
 #include "binding.h"
 #include "configuration.h"
 #include "display.h"
+#include "monitor.h"
 #include "window.h"
 
 /* the information retrieved from the X server and Xkb context */
 struct display display;
+
+/* Set up the RandR extension for multi-monitor support. */
+static void initialize_randr(xcb_randr_get_screen_resources_cookie_t cookie)
+{
+    const xcb_query_extension_reply_t *extension_reply;
+
+    extension_reply = xcb_get_extension_data(display.xcb, &xcb_randr_id);
+    ASSERT(extension_reply != NULL,
+            "failed to query xcb extension data for RandR\n");
+    ASSERT(extension_reply->present, "the server does not support RandR");
+
+    display.randr_base_event = extension_reply->first_event;
+    display.randr_base_error = extension_reply->first_error;
+
+    /* listen for changes in the monitor setup */
+    xcb_randr_select_input(display.xcb, display.root,
+            XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE |
+            XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+
+    /* now get the current configuration */
+    initialize_monitor_setup(cookie);
+}
 
 /* When an event by Xkb arrives indicating that the keyboard mapping changes,
  * this takes according actions to refresh the keymap and keyboard state.
@@ -158,6 +184,8 @@ void open_display(void)
     xcb_intern_atom_cookie_t wm_sn_atom_cookie, manager_atom_cookie;
     xcb_intern_atom_reply_t *wm_sn_atom_reply, *manager_atom_reply;
 
+    xcb_randr_get_screen_resources_cookie_t randr_cookie;
+
     xcb_xkb_use_extension_cookie_t xkb_cookie;
     xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
     xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
@@ -179,6 +207,7 @@ void open_display(void)
         }
     }
 
+    xcb_prefetch_extension_data(display.xcb, &xcb_randr_id);
     xcb_prefetch_extension_data(display.xcb, &xcb_xkb_id);
 
     /* prefetch the WM_Sn atom and MANAGER atom */
@@ -187,6 +216,8 @@ void open_display(void)
             strlen(wm_sn_atom_name), wm_sn_atom_name);
     manager_atom_cookie = xcb_intern_atom(display.xcb, false,
             strlen(manager_atom_name), manager_atom_name);
+
+    randr_cookie = xcb_randr_get_screen_resources(display.xcb, display.root);
 
     xkb_cookie = xcb_xkb_use_extension(display.xcb,
             XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
@@ -218,10 +249,11 @@ void open_display(void)
     display.manager_atom = manager_atom_reply->atom;
     free(manager_atom_reply);
 
+    initialize_randr(randr_cookie);
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
 
     /* the root window starts off with property notifications and will always
-     * listen for property nofitications to get server timestamps
+     * listen for property notifications to get server timestamps
      */
     const uint32_t root_mask = XCB_CW_EVENT_MASK;
     const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
@@ -233,6 +265,29 @@ void open_display(void)
 static void handle_error(xcb_generic_error_t *error)
 {
     notef("error: %u\n", error->error_code);
+}
+
+/* Handle an event by the RandR extension. */
+static void handle_randr_event(xcb_generic_event_t *generic_event)
+{
+    xcb_randr_notify_event_t *event;
+
+    event = (xcb_randr_notify_event_t*) generic_event;
+    switch (event->subCode) {
+    case XCB_RANDR_NOTIFY_CRTC_CHANGE:
+        notef("randr: crtc %" PRIu32 " changed\n",
+                event->u.cc.crtc);
+        change_crtc(event->u.cc.crtc, event->u.cc.mode, event->u.cc.rotation,
+                event->u.cc.x, event->u.cc.y, event->u.cc.width, event->u.cc.height);
+        break;
+
+    case XCB_RANDR_NOTIFY_OUTPUT_CHANGE:
+        notef("randr: output %" PRIu32 " changed\n",
+                event->u.oc.output);
+        change_output(event->u.oc.output, event->u.oc.crtc, event->u.oc.mode,
+                event->u.oc.rotation, event->u.oc.connection);
+        break;
+    }
 }
 
 /* Handle an event by the xkb extension. */
@@ -291,6 +346,9 @@ static int handle_extension_event(xcb_generic_event_t *event)
             status = 0;
         } else if (event->response_type == display.xkb_base_event) {
             handle_xkb_event(event);
+            status = 0;
+        } else if (event->response_type == display.randr_base_event + XCB_RANDR_NOTIFY) {
+            handle_randr_event(event);
             status = 0;
         }
     }

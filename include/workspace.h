@@ -5,16 +5,20 @@
 
 #include <utility/list.h>
 
+#include <xcb/randr.h>
 #include <xcb/xproto.h>
+
+/* a unique workspace ID */
+typedef uint32_t workspace_t;
 
 struct workspace {
     /* unique identifier of the workspace */
-    unsigned id;
-    /* list of all windows associated to this workspace */
-    LIST(xcb_window_t, windows);
+    workspace_t id;
+    /* the crtc this workspace is on */
+    xcb_randr_crtc_t crtc;
 };
 
 /* Focus the workspace identified by @id. */
-void focus_workspace(unsigned id);
+void focus_workspace(workspace_t id);
 
-#undef
+#endif
