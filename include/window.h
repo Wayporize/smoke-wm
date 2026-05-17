@@ -29,7 +29,7 @@ struct window_cache {
     workspace_t workspace;
 };
 
-/* Go through all windows that already exist and manage them. */
+/* TODO: Go through all windows that already exist and manage them. */
 void query_existing_windows(void);
 
 /* Create and register a new window from an X11 event. */

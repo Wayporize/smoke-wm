@@ -128,9 +128,7 @@ int main(int argc, char **argv)
 
     /* try to become the active window manager */
     status = take_wm_ownership();
-    if (status != WM_OWNERSHIP_SUCCESS) {
-        ABORT("could not become the window manager\n");
-    }
+    ASSERT(status == WM_OWNERSHIP_SUCCESS, "could not become the window manager\n");
 
     /* receive all events by the server and handle them */
     handle_server_events();

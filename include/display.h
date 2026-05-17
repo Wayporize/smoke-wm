@@ -63,10 +63,7 @@ enum wm_ownership_status {
     WM_OWNERSHIP_TIMEOUT,
 };
 
-/* Try to become the window manager on the current X11 connection.
- *
- * If this fails, the program exits.
- */
+/* Try to become the window manager on the current X11 connection. */
 enum wm_ownership_status take_wm_ownership(void);
 
 /* Handle incoming events on the X11 connection.
