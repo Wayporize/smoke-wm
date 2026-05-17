@@ -110,7 +110,7 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
     primary = primary_reply->output;
     free(primary_reply);
 
-    /* associated to "2?-randr-*.sh" tests */
+    /* associated to test "randr-setup" */
     dump_monitor_setup();
 }
 

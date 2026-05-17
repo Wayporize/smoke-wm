@@ -87,12 +87,12 @@ int main(int argc, char **argv)
         user_home = xstrdup(home);
     }
 
-    /* associated to test tests/home.sh */
+    /* associated to test "home" */
     notef("user home: %s\n", user_home);
 
     path = get_configuration_path();
 
-    /* associated to test tests/configuration-path.sh */
+    /* associated to test "configuration-path" */
     notef("configuration path: %s\n", path);
 
     open_display();
@@ -100,11 +100,11 @@ int main(int argc, char **argv)
     /* parse the configuration or set the default one */
     if (path != NULL) {
         if (parse_toml_configuration(path, &Configuration) == 0) {
-            /* associated to test tests/toml.sh */
+            /* associated to test "toml" */
             notef("parsing configuration succeeded\n");
             set_configuration_bindings(&Configuration);
         } else {
-            /* associated to test tests/toml.sh */
+            /* associated to test "toml" */
             notef("parsing configuration failed\n");
             Configuration = Configuration_default;
             /* TODO: set default bindings */
@@ -116,12 +116,12 @@ int main(int argc, char **argv)
         /* TODO: set default bindings */
     }
 
-    /* associated to test tests/configuration.sh */
+    /* associated to test "configuration" */
     notef("start of dumping configuration\n");
     dump_configuration(&Configuration);
     notef("end of dumping configuration\n");
 
-    /* associated to test tests/bindings.sh */
+    /* associated to test "bindings" */
     notef("start of dumping bindings\n");
     dump_bindings();
     notef("end of dumping bindings\n");
