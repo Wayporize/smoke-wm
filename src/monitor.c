@@ -40,7 +40,6 @@ static struct monitor *get_monitor(xcb_randr_crtc_t id)
 /* Dump the monitor setup to stdout. */
 static void dump_monitor_setup(void)
 {
-    notef("start of dumping monitor setup\n");
     printf("primary %" PRIu32 "\n", primary);
     for (size_t i = 0; i < monitors_length; i++) {
         printf("monitor %u: %" PRId32 "x%" PRId32 "+%" PRId32 "+%" PRId32 " %u\n",
@@ -54,7 +53,6 @@ static void dump_monitor_setup(void)
                 outputs[i].connection == XCB_RANDR_CONNECTION_DISCONNECTED ? "disconnected" :
                 "unknown");
     }
-    notef("end of dumping monitor setup\n");
 }
 
 /* Initialize the output and monitor list with the current RandR configuration. */
@@ -138,7 +136,9 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
     free(primary_reply);
 
     /* associated to test "randr-setup" */
+    notef("start of dumping monitor setup\n");
     dump_monitor_setup();
+    notef("end of dumping monitor setup\n");
 }
 
 /* Cache output properties. */

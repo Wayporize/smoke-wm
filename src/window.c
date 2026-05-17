@@ -11,11 +11,12 @@
 /* list of all windows */
 STATIC_LIST(struct window_cache, windows);
 
+/* empty window */
+static struct window_cache null_window;
+
 /* Get a window cache by given X11 window id. */
 struct window_cache *get_window_by_id(xcb_window_t id)
 {
-    static struct window_cache null_window;
-
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i].id == id) {
             return &windows[i];
@@ -225,12 +226,13 @@ void handle_configure_request(xcb_configure_request_event_t *event)
 void destroy_window(xcb_destroy_notify_event_t *event)
 {
     struct window_cache *window;
-    size_t index;
 
     window = get_window_by_id(event->window);
-    index = window - windows;
-    windows_length--;
-    MOVE(window, window + 1, windows_length - index);
+    if (window != &null_window) {
+        windows_length--;
+        const size_t index = window - windows;
+        MOVE(window, window + 1, windows_length - index);
+    }
 
     notef("window %#x destruction registered\n", event->window);
 }

@@ -16,35 +16,30 @@ trap at_exit INT EXIT
 
 mkdir "$temp/smoke-wm"
 
-for f in tests/toml/valid/*.toml ; do
-    # Add it as configuration file
-    cp "$f" "$temp/smoke-wm/config.toml"
-
+run_config_test() {
     # Try to find a parsing configuration status line
     while read -r line ; do
         line="${line#\[*\] }"
-        if [ "$line" = "$failure" ] ; then
+        if [ "$line" = "$1" ] ; then
             echo "test failed on '$f'"
-            exit 1
-        elif [ "$line" = "$success" ] ; then
-            break
+            return 1
+        elif [ "$line" = "$2" ] ; then
+            return 0
         fi
     done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
+    return 1
+}
+
+for f in tests/toml/valid/*.toml ; do
+    # Add it as configuration file
+    cp "$f" "$temp/smoke-wm/config.toml"
+    run_config_test "$failure" "$success"
 done
 
 for f in tests/toml/invalid/*.toml ; do
     # Add it as configuration file
     cp "$f" "$temp/smoke-wm/config.toml"
 
-    # Try to find a parsing configuration status line
-    while read -r line ; do
-        line="${line#\[*\] }"
-        if [ "$line" = "$failure" ] ; then
-            break
-        elif [ "$line" = "$success" ] ; then
-            echo "test failed on '$f'"
-            exit 1
-        fi
-    done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
+    run_config_test "$success" "$failure"
 done
 
