@@ -275,15 +275,11 @@ static void handle_randr_event(xcb_generic_event_t *generic_event)
     event = (xcb_randr_notify_event_t*) generic_event;
     switch (event->subCode) {
     case XCB_RANDR_NOTIFY_CRTC_CHANGE:
-        notef("randr: crtc %" PRIu32 " changed\n",
-                event->u.cc.crtc);
         change_crtc(event->u.cc.crtc, event->u.cc.mode, event->u.cc.rotation,
                 event->u.cc.x, event->u.cc.y, event->u.cc.width, event->u.cc.height);
         break;
 
     case XCB_RANDR_NOTIFY_OUTPUT_CHANGE:
-        notef("randr: output %" PRIu32 " changed\n",
-                event->u.oc.output);
         change_output(event->u.oc.output, event->u.oc.crtc, event->u.oc.mode,
                 event->u.oc.rotation, event->u.oc.connection);
         break;

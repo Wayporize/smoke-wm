@@ -116,17 +116,15 @@ int main(int argc, char **argv)
         /* TODO: set default bindings */
     }
 
-#ifdef DEBUG
     /* associated to test tests/configuration.sh */
     notef("start of dumping configuration\n");
-    debug_dump_configuration(&Configuration);
+    dump_configuration(&Configuration);
     notef("end of dumping configuration\n");
 
     /* associated to test tests/bindings.sh */
     notef("start of dumping bindings\n");
-    debug_dump_bindings();
+    dump_bindings();
     notef("end of dumping bindings\n");
-#endif
 
     /* try to become the active window manager */
     status = take_wm_ownership();
