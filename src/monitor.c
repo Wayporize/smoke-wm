@@ -6,12 +6,38 @@
 #include "display.h"
 #include "monitor.h"
 
+/* list of output devices the user has */
 STATIC_LIST(struct output, outputs);
+
+/* sub regions of the screen */
 STATIC_LIST(struct monitor, monitors);
 
 /* primary output device */
 xcb_randr_output_t primary;
 
+/* Get information about an output. */
+static struct output *get_output(xcb_randr_output_t id)
+{
+    for (size_t i = 0; i < outputs_length; i++) {
+        if (outputs[i].id == id) {
+            return &outputs[i];
+        }
+    }
+    return NULL;
+}
+
+/* Get information about a monitor. */
+static struct monitor *get_monitor(xcb_randr_crtc_t id)
+{
+    for (size_t i = 0; i < monitors_length; i++) {
+        if (monitors[i].id == id) {
+            return &monitors[i];
+        }
+    }
+    return NULL;
+}
+
+/* Dump the monitor setup to stdout. */
 static void dump_monitor_setup(void)
 {
     notef("start of dumping monitor setup\n");
@@ -94,6 +120,7 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
         ASSERT(info_reply != NULL, "could not get crtc info");
 
         monitors[i].id = monitor_ids[i];
+        monitors[i].mode = info_reply->mode;
         monitors[i].x = info_reply->x;
         monitors[i].y = info_reply->y;
         monitors[i].width = info_reply->width;
@@ -115,17 +142,96 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
 }
 
 /* Cache output properties. */
-void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_mode_t mode,
-        xcb_randr_rotation_t rotation, xcb_randr_connection_t connection)
+void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_connection_t connection,
+        xcb_timestamp_t config_timestamp)
 {
-    notef("randr: output %" PRIu32 " changed\n", output);
-    /* TODO: */
+    struct output *info;
+
+    notef("randr: output %" PRIu32 " changed: %" PRIu32 " %u" "\n", output,
+            crtc, connection);
+    info = get_output(output);
+    if (info == NULL) {
+        xcb_randr_get_output_info_cookie_t cookie;
+        xcb_randr_get_output_info_reply_t *reply;
+        uint8_t *name;
+        int name_length;
+
+        notef("this output is new\n");
+
+        /* send out a request for the name, this is so rare that it does not
+         * need to be efficient, in fact it might never happen once in a user's
+         * lifetime
+         */
+        cookie = xcb_randr_get_output_info(display.xcb, output, config_timestamp);
+        reply = xcb_randr_get_output_info_reply(display.xcb, cookie, NULL);
+        ASSERT(reply != NULL, "could not get output info");
+
+        LIST_APPEND(outputs, NULL, 1);
+        info = &outputs[outputs_length - 1];
+        info->id = output;
+        name = xcb_randr_get_output_info_name(reply);
+        name_length = xcb_randr_get_output_info_name_length(reply);
+        info->name = xstrndup((char*) name, name_length);
+        info->crtc = reply->crtc;
+        info->connection = reply->connection;
+        free(reply);
+        /* TODO: now maybe a workspaces need to be added or windows configured
+         * to be on this output should be moved to it if not explicitly moved
+         * away some time in the past in case a crtc is present
+         */
+    } else {
+        /* TODO: if the crtc changed, we need to inform the user as windows
+         * might me hidden now
+         */
+        info->crtc = crtc;
+        /* TODO: if the connection is disonnected, should it be treated the same
+         * as no crtc?
+         */
+        info->connection = connection;
+    }
 }
 
 /* Cache crtc properties. */
 void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotation_t rotation,
         int32_t x, int32_t y, int32_t width, int32_t height)
 {
-    notef("randr: crtc %" PRIu32 " changed\n", crtc);
-    /* TODO: */
+    struct monitor *info;
+
+    notef("randr: crtc %" PRIu32 " changed: %" PRIu32 " %u %" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 "\n",
+            crtc, mode, rotation, x, y, width, height);
+    info = get_monitor(crtc);
+    if (info == NULL) {
+        notef("this crtc is new\n");
+
+        LIST_APPEND(monitors, NULL, 1);
+        info = &monitors[monitors_length - 1];
+        info->id = crtc;
+        info->mode = mode;
+        info->rotation = rotation;
+        info->x = x;
+        info->y = y;
+        info->width = width;
+        info->height = height;
+        /* TODO: new content might be visible now */
+    } else {
+        /* TODO: the size might have changed, need to adjust tiling windows and
+         * put windows in bounds
+         */
+        if (mode == XCB_NONE) {
+            /* TODO: delete this crtc? */
+            info->mode = mode;
+            info->rotation = rotation;
+            /* do not set the position and size here! */
+        } else {
+            /* TODO: if the previous mode was `XCB_NONE`, there might be some
+             * new visible content now
+             */
+            info->mode = mode;
+            info->rotation = rotation;
+            info->x = x;
+            info->y = y;
+            info->width = width;
+            info->height = height;
+        }
+    }
 }

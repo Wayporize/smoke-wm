@@ -280,8 +280,7 @@ static void handle_randr_event(xcb_generic_event_t *generic_event)
         break;
 
     case XCB_RANDR_NOTIFY_OUTPUT_CHANGE:
-        change_output(event->u.oc.output, event->u.oc.crtc, event->u.oc.mode,
-                event->u.oc.rotation, event->u.oc.connection);
+        change_output(event->u.oc.output, event->u.oc.crtc, event->u.oc.connection, event->u.oc.config_timestamp);
         break;
     }
 }

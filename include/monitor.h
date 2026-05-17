@@ -25,6 +25,8 @@ struct output {
 struct monitor {
     /* the crtc identifier */
     xcb_randr_crtc_t id;
+    /* the crtc is disable if this is `XCB_NONE` */
+    xcb_randr_mode_t mode;
     /* position and size of the monitor (CRTC) */
     int32_t x, y, width, height;
     /* rotation of the crtc */
@@ -35,8 +37,8 @@ struct monitor {
 void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie);
 
 /* Cache output properties. */
-void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_mode_t mode,
-        xcb_randr_rotation_t rotation, xcb_randr_connection_t connection);
+void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc,
+        xcb_randr_connection_t connection, xcb_timestamp_t config_timestamp);
 
 /* Cache crtc properties. */
 void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotation_t rotation,
