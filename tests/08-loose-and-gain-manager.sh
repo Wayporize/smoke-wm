@@ -15,7 +15,6 @@ mkfifo "$fifo"
 exec 3<>"$fifo"
 
 XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" &
-smoke_wm_pid="$!"
 
 wait_for_line() {
     while read -t 4 -r line ; do

@@ -31,7 +31,7 @@ wait_for_line() {
     return 1
 }
 
-"$SMOKE_WM" >"$fifo" &
+XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" &
 wait_for_line "taking over"
 
 "$RUN" &
