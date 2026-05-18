@@ -184,7 +184,7 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_c
          * might me hidden now
          */
         info->crtc = crtc;
-        /* TODO: if the connection is disonnected, should it be treated the same
+        /* TODO: if the connection is disconnected, should it be treated the same
          * as no crtc?
          */
         info->connection = connection;
