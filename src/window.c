@@ -71,6 +71,13 @@ void change_property(xcb_property_notify_event_t *event)
 
     REINSTANTIATE(XCB_ATOM_WM_NORMAL_HINTS, wm_normal_hints, xcb_icccm_get_wm_normal_hints)
     else REINSTANTIATE(XCB_ATOM_WM_HINTS, wm_hints, xcb_icccm_get_wm_hints)
+    else if (event->atom == display.wm_protocols) {
+        xcb_discard_reply(display.xcb, window->wm_protocols.cookie.sequence);
+        free(window->wm_protocols.reply);
+        window->wm_protocols.reply = NULL;
+        window->wm_protocols.cookie = xcb_icccm_get_wm_protocols(display.xcb,
+                event->window, display.wm_protocols);
+    }
 
 #undef REINSTANTIATE
 }
@@ -127,6 +134,8 @@ void handle_map_request(xcb_map_request_event_t *event)
     xcb_icccm_wm_hints_t hints;
     xcb_size_hints_t size_hints;
     xcb_icccm_wm_state_t old_state;
+    xcb_icccm_get_wm_protocols_reply_t protocols;
+    bool has_wm_take_focus = false;
 
     notef("got map request for %#x\n", event->window);
 
@@ -142,6 +151,12 @@ void handle_map_request(xcb_map_request_event_t *event)
             !xcb_icccm_get_wm_size_hints_from_reply(&size_hints,
                 window->wm_normal_hints.reply)) {
         ZERO(&size_hints, 1);
+    }
+
+    if (update_property(&window->wm_protocols) != 0 ||
+            !xcb_icccm_get_wm_protocols_from_reply(window->wm_protocols.reply,
+                &protocols)) {
+        ZERO(&protocols, 1);
     }
 
     old_state = window->state;
@@ -184,14 +199,31 @@ void handle_map_request(xcb_map_request_event_t *event)
     }
     xcb_flush(display.xcb);
 
-    /* TODO: check for WM_TAKE_FOCUS protocol */
-    if (window->state == XCB_ICCCM_WM_STATE_NORMAL &&
-            /* check if the window needs us to focus it directly */
-            (((hints.flags & XCB_ICCCM_WM_HINT_INPUT) && hints.input) ||
-                /* assume input = true if missing */
-                !(hints.flags & XCB_ICCCM_WM_HINT_INPUT))) {
-        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_PARENT,
-                event->window, XCB_CURRENT_TIME);
+    if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
+        for (uint32_t i = 0; i < protocols.atoms_len; i++) {
+            if (protocols.atoms[i] == display.wm_take_focus) {
+                has_wm_take_focus = true;
+                break;
+            }
+        }
+        if (has_wm_take_focus) {
+            xcb_client_message_event_t message;
+
+            message.response_type = XCB_CLIENT_MESSAGE;
+            message.window = event->window;
+            message.format = 32;
+            message.type = display.wm_protocols;
+            message.data.data32[0] = display.wm_take_focus;
+            message.data.data32[1] = display.last_timestamp;
+            xcb_send_event(display.xcb, false, display.root,
+                    XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) &message);
+        /* check if the window needs us to focus it directly */
+        } else if (((hints.flags & XCB_ICCCM_WM_HINT_INPUT) && hints.input) ||
+                    /* assume input = true if missing */
+                    !(hints.flags & XCB_ICCCM_WM_HINT_INPUT)) {
+            xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_PARENT,
+                    event->window, display.last_timestamp);
+        }
         xcb_flush(display.xcb);
     }
 }

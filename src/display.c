@@ -179,10 +179,18 @@ void open_display(void)
     const xcb_setup_t *setup;
     xcb_screen_iterator_t iterator;
 
-    char *wm_sn_atom_name;
-    const char *const manager_atom_name = "MANAGER";
-    xcb_intern_atom_cookie_t wm_sn_atom_cookie, manager_atom_cookie;
-    xcb_intern_atom_reply_t *wm_sn_atom_reply, *manager_atom_reply;
+    struct intern_atom {
+        const char *name;
+        xcb_intern_atom_cookie_t cookie;
+        xcb_atom_t *target;
+    } intern_atoms[] = {
+        /* the `%u` becomes the screen number */
+        { .name = "WM_S%u", .target = &display.wm_sn_atom },
+        { .name = "MANAGER", .target = &display.manager_atom },
+
+        { .name = "WM_PROTOCOLS", .target = &display.wm_protocols },
+        { .name = "WM_TAKE_FOCUS", .target = &display.wm_take_focus },
+    };
 
     xcb_randr_get_screen_resources_cookie_t randr_cookie;
 
@@ -207,15 +215,19 @@ void open_display(void)
         }
     }
 
+    /* prefetch extensions */
     xcb_prefetch_extension_data(display.xcb, &xcb_randr_id);
     xcb_prefetch_extension_data(display.xcb, &xcb_xkb_id);
 
-    /* prefetch the WM_Sn atom and MANAGER atom */
-    wm_sn_atom_name = xasprintf("WM_S%u", display.screen_index);
-    wm_sn_atom_cookie = xcb_intern_atom(display.xcb, false,
+    /* prefetch all atoms */
+    char *const wm_sn_atom_name = xasprintf(intern_atoms[0].name, display.screen_index);
+    intern_atoms[0].cookie = xcb_intern_atom(display.xcb, false,
             strlen(wm_sn_atom_name), wm_sn_atom_name);
-    manager_atom_cookie = xcb_intern_atom(display.xcb, false,
-            strlen(manager_atom_name), manager_atom_name);
+    free(wm_sn_atom_name);
+    for (size_t i = 1; i < SIZE(intern_atoms); i++) {
+        intern_atoms[i].cookie = xcb_intern_atom(display.xcb, false,
+            strlen(intern_atoms[i].name), intern_atoms[i].name);
+    }
 
     randr_cookie = xcb_randr_get_screen_resources(display.xcb, display.root);
 
@@ -233,21 +245,15 @@ void open_display(void)
             XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
             0, 0, 0);
 
-    /* get the value of the WM_Sn atom */
-    wm_sn_atom_reply = xcb_intern_atom_reply(display.xcb, wm_sn_atom_cookie,
-            NULL);
-    ASSERT(wm_sn_atom_reply != NULL, "could not intern %s atom\n",
-            wm_sn_atom_name);
-    free(wm_sn_atom_name);
-    display.wm_sn_atom = wm_sn_atom_reply->atom;
-    free(wm_sn_atom_reply);
-    /* get the value of the MANAGER atom */
-    manager_atom_reply = xcb_intern_atom_reply(display.xcb, manager_atom_cookie,
-            NULL);
-    ASSERT(manager_atom_reply != NULL, "could not intern %s atom\n",
-            manager_atom_name);
-    display.manager_atom = manager_atom_reply->atom;
-    free(manager_atom_reply);
+    /* get the value of all atoms */
+    for (size_t i = 0; i < SIZE(intern_atoms); i++) {
+        xcb_intern_atom_reply_t *atom_reply;
+
+        atom_reply = xcb_intern_atom_reply(display.xcb, intern_atoms[i].cookie, NULL);
+        ASSERT(atom_reply != NULL, "could not intern %s atom\n", intern_atoms[i].name);
+        *(intern_atoms[i].target) = atom_reply->atom;
+        free(atom_reply);
+    }
 
     initialize_randr(randr_cookie);
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
@@ -501,7 +507,6 @@ enum wm_ownership_status take_wm_ownership(void)
     xcb_timestamp_t timestamp;
     xcb_window_t owner, previous_owner;
     enum wm_ownership_status status = WM_OWNERSHIP_SUCCESS;
-    xcb_client_message_event_t message;
     xcb_void_cookie_t cookie;
     xcb_generic_error_t *error;
 
@@ -517,6 +522,8 @@ enum wm_ownership_status take_wm_ownership(void)
             previous_owner, display.wm_sn_atom);
 
     timestamp = get_server_timestamp();
+    /* take this opportunity to initialize the timestamp */
+    display.last_timestamp = timestamp;
     xcb_set_selection_owner(display.xcb, display.wm_sn_window,
             display.wm_sn_atom, timestamp);
 
@@ -543,6 +550,8 @@ enum wm_ownership_status take_wm_ownership(void)
         notef("a third manager interferred, can not take over\n");
         status = WM_OWNERSHIP_INTERFERRED;
     } else {
+        xcb_client_message_event_t message;
+
         /* send out a client message to announce that we are the new owner
          */
         message.response_type = XCB_CLIENT_MESSAGE;

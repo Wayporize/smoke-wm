@@ -23,6 +23,8 @@ struct window_cache {
     struct window_property wm_normal_hints;
     /* additional hints set by a client */
     struct window_property wm_hints;
+    /* supported ICCCM protocols by the client for this window */
+    struct window_property wm_protocols;
     /* the current window state */
     xcb_icccm_wm_state_t state;
     /* the workspace this window is on */
