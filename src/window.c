@@ -11,6 +11,9 @@
 /* list of all windows */
 STATIC_LIST(struct window_cache, windows);
 
+/* the currently focused window */
+static xcb_window_t focused_window;
+
 /* empty window */
 static struct window_cache null_window;
 
@@ -30,7 +33,9 @@ struct window_cache *get_window_by_id(xcb_window_t id)
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event)
 {
-    const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+    const uint32_t values[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+    };
     xcb_change_window_attributes(display.xcb, event->window,
             XCB_CW_EVENT_MASK, values);
 
@@ -185,7 +190,7 @@ void handle_map_request(xcb_map_request_event_t *event)
             (((hints.flags & XCB_ICCCM_WM_HINT_INPUT) && hints.input) ||
                 /* assume input = true if missing */
                 !(hints.flags & XCB_ICCCM_WM_HINT_INPUT))) {
-        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_POINTER_ROOT,
+        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_PARENT,
                 event->window, XCB_CURRENT_TIME);
         xcb_flush(display.xcb);
     }
@@ -215,11 +220,17 @@ void handle_configure_request(xcb_configure_request_event_t *event)
 
     synthetic_event->override_redirect = false;
 
-    notef("sending synthetic configure event to %#x\n", event->window);
+    notef("sending synthetic configure event to %#" PRIx32 "\n", event->window);
     xcb_send_event(display.xcb, false, event->window,
             XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) synthetic_event);
     free(synthetic_event);
     xcb_flush(display.xcb);
+}
+
+/* Tell the window module the new focused window. */
+void report_focus_change(xcb_window_t window)
+{
+    notef("focus changed to %#" PRIx32 "\n", window);
 }
 
 /* Unregister a window. */

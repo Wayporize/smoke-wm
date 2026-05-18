@@ -256,7 +256,9 @@ void open_display(void)
      * listen for property notifications to get server timestamps
      */
     const uint32_t root_mask = XCB_CW_EVENT_MASK;
-    const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+    const uint32_t root_attributes[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+    };
     xcb_change_window_attributes(display.xcb, display.root,
             root_mask, root_attributes);
 }
@@ -430,7 +432,7 @@ static xcb_window_t change_selection_owner_event_mask_to_destruction(
 
         const uint32_t manager_mask = XCB_CW_EVENT_MASK;
         const uint32_t manager_attributes[] = {
-            XCB_EVENT_MASK_STRUCTURE_NOTIFY
+            XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_FOCUS_CHANGE
         };
         xcb_change_window_attributes(display.xcb, owner,
                 manager_mask, manager_attributes);
@@ -557,6 +559,7 @@ enum wm_ownership_status take_wm_ownership(void)
         const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
         const uint32_t managed_root_attributes[] = {
             XCB_EVENT_MASK_PROPERTY_CHANGE |
+            XCB_EVENT_MASK_FOCUS_CHANGE |
             XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
         };
@@ -657,7 +660,9 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             event->selection == display.wm_sn_atom) {
         /* property change events are needed to get the server timestamp */
         const uint32_t root_mask = XCB_CW_EVENT_MASK;
-        const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+        const uint32_t root_attributes[] = {
+            XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+        };
         xcb_change_window_attributes(display.xcb, display.root,
                 root_mask, root_attributes);
 
@@ -697,33 +702,70 @@ void handle_server_events(void)
             status = 0;
 
             switch (event->response_type) {
-            case XCB_SELECTION_CLEAR:
+            case XCB_SELECTION_CLEAR: /* we might have lost the manager selection */
                 handle_selection_clear((xcb_selection_clear_event_t*) event);
                 break;
 
-            case XCB_CREATE_NOTIFY:
+            case XCB_CREATE_NOTIFY: /* a window was created */
                 create_window((xcb_create_notify_event_t*) event);
                 break;
 
-            case XCB_PROPERTY_NOTIFY:
+            case XCB_PROPERTY_NOTIFY: /* a window property changed */
                 change_property((xcb_property_notify_event_t*) event);
                 break;
 
-            case XCB_CONFIGURE_REQUEST:
+            case XCB_CONFIGURE_REQUEST: /* a window wants to be configured */
                 handle_configure_request((xcb_configure_request_event_t*) event);
                 break;
 
-            case XCB_MAP_REQUEST:
+            case XCB_MAP_REQUEST: /* a window wants to be shown on screen */
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
 
-            case XCB_DESTROY_NOTIFY:
+            case XCB_FOCUS_IN: { /* a window gained focus */
+                xcb_focus_in_event_t *focus;
+
+                focus = (xcb_focus_in_event_t*) event;
+                /* other modes are related to grabs which are just temporary
+                 * which does not concern us for now
+                 */
+                if (focus->mode == XCB_NOTIFY_MODE_NORMAL) {
+                    /* these details are for focus changes between the top level
+                     * window and its inferiors or change back to the ancestor,
+                     * it does not mean the actual top level focus changed
+                     */
+                    if (focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
+                            focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL) {
+                        /* ignore */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
+                            /* the focus might have reverted with `FOCUS_PARENT`
+                             * or other edge cases that were not considered...
+                             */
+                            focus->detail == XCB_NOTIFY_DETAIL_INFERIOR ||
+                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR ||
+                            /* the window with the pointer on it was focused
+                             * because the focused window lost focus
+                             */
+                            focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
+                        /* the truest "focus changed from A to B" event */
+                        report_focus_change(focus->event);
+                    } else {
+                        /* TODO: the root or None got focused, delegate the
+                         * focus to a different window
+                         */
+                    }
+                }
+                break;
+            }
+
+            case XCB_DESTROY_NOTIFY: /* a window was destroyed */
                 destroy_window((xcb_destroy_notify_event_t*) event);
                 break;
 
-            case XCB_MAP_NOTIFY:
-            case XCB_UNMAP_NOTIFY:
-            case XCB_CONFIGURE_NOTIFY:
+            case XCB_MAP_NOTIFY: /* a window was shown */
+            case XCB_UNMAP_NOTIFY: /* a window was hidden */
+            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+            case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;
 

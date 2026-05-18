@@ -26,7 +26,7 @@ static struct output *get_output(xcb_randr_output_t id)
     return NULL;
 }
 
-/* Get information about a monitor. */
+/* Get information about a monitor/crtc. */
 static struct monitor *get_monitor(xcb_randr_crtc_t id)
 {
     for (size_t i = 0; i < monitors_length; i++) {

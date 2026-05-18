@@ -56,6 +56,9 @@ void handle_map_request(xcb_map_request_event_t *event);
 /* Handle when a client wants to change the geometry or stacking of a window. */
 void handle_configure_request(xcb_configure_request_event_t *event);
 
+/* Tell the window module the new focused window. */
+void report_focus_change(xcb_window_t window);
+
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);
 
