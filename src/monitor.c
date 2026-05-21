@@ -181,7 +181,7 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_c
          */
     } else {
         /* TODO: if the crtc changed, we need to inform the user as windows
-         * might me hidden now
+         * might be hidden now
          */
         info->crtc = crtc;
         /* TODO: if the connection is disconnected, should it be treated the same

@@ -37,7 +37,7 @@ static void initialize_randr(xcb_randr_get_screen_resources_cookie_t cookie)
             XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE |
             XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
 
-    /* now get the current configuration */
+    /* get the current configuration */
     initialize_monitor_setup(cookie);
 }
 
@@ -274,11 +274,13 @@ static void handle_randr_event(xcb_generic_event_t *generic_event)
 
     event = (xcb_randr_notify_event_t*) generic_event;
     switch (event->subCode) {
+    /* mode, rotation or position/size of a CRTC changed */
     case XCB_RANDR_NOTIFY_CRTC_CHANGE:
         change_crtc(event->u.cc.crtc, event->u.cc.mode, event->u.cc.rotation,
                 event->u.cc.x, event->u.cc.y, event->u.cc.width, event->u.cc.height);
         break;
 
+    /* the crtc or connection status of an output device changed */
     case XCB_RANDR_NOTIFY_OUTPUT_CHANGE:
         change_output(event->u.oc.output, event->u.oc.crtc, event->u.oc.connection, event->u.oc.config_timestamp);
         break;
@@ -342,6 +344,7 @@ static int handle_extension_event(xcb_generic_event_t *event)
         } else if (event->response_type == display.xkb_base_event) {
             handle_xkb_event(event);
             status = 0;
+        /* add `XCB_RANDR_NOTIFY` which is the newer RandR event system */
         } else if (event->response_type == display.randr_base_event + XCB_RANDR_NOTIFY) {
             handle_randr_event(event);
             status = 0;
