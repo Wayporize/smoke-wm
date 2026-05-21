@@ -764,8 +764,12 @@ void handle_server_events(void)
                             /* "virtual" means an inferior got focused but not the
                              * window itself
                              */
-                            focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
-                            focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
+                            ((focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
+                                focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL) &&
+                                /* if the root is focused here this means a
+                                 * child top level will be focused
+                                 */
+                                focus->event != display.root) ||
                             /* the focus might have reverted with `FOCUS_PARENT`
                              * or other edge cases that were not considered...
                              */
@@ -777,7 +781,8 @@ void handle_server_events(void)
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
                         /* the truest "focus changed from A to B" event */
                         report_focus_change(focus->event);
-                    } else {
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
+                            focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
                         /* TODO: the root or None got focused, delegate the
                          * focus to a different window
                          */
