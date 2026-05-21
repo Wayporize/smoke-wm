@@ -25,7 +25,6 @@ exec 5<>"$fifo3"
 wait_for_line() {
     while read -t 4 -r line ; do
         line="${line#\[*\] }"
-        echo "$line"
         if [[ "$line" =~ $2 ]] ; then
             return 0
         fi

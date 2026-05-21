@@ -759,14 +759,13 @@ void handle_server_events(void)
                  * which does not concern us for now
                  */
                 if (focus->mode == XCB_NOTIFY_MODE_NORMAL) {
-                    /* these details are for focus changes between the top level
-                     * window and its inferiors or change back to the ancestor,
-                     * it does not mean the actual top level focus changed
-                     */
-                    if (focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
-                            focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL) {
-                        /* ignore */
-                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
+                    /* the window got directly focused */
+                    if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
+                            /* "virtual" means an inferior got focused but not the
+                             * window itself
+                             */
+                            focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
+                            focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
                             /* the focus might have reverted with `FOCUS_PARENT`
                              * or other edge cases that were not considered...
                              */
