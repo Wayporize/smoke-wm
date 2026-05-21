@@ -5,8 +5,9 @@
 #include <unistd.h>
 #include <utility/log.h>
 
-#include <xcb/xkb.h>
 #include <xcb/randr.h>
+#include <xcb/xcb_errors.h>
+#include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
@@ -179,10 +180,16 @@ void open_display(void)
     const xcb_setup_t *setup;
     xcb_screen_iterator_t iterator;
 
+    xcb_randr_get_screen_resources_cookie_t randr_cookie;
+
+    xcb_xkb_use_extension_cookie_t xkb_cookie;
+    xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
+    xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
+
     struct intern_atom {
         const char *name;
-        xcb_intern_atom_cookie_t cookie;
         xcb_atom_t *target;
+        xcb_intern_atom_cookie_t cookie;
     } intern_atoms[] = {
         /* the `%u` becomes the screen number */
         { .name = "WM_S%u", .target = &display.wm_sn_atom },
@@ -191,12 +198,6 @@ void open_display(void)
         { .name = "WM_PROTOCOLS", .target = &display.wm_protocols },
         { .name = "WM_TAKE_FOCUS", .target = &display.wm_take_focus },
     };
-
-    xcb_randr_get_screen_resources_cookie_t randr_cookie;
-
-    xcb_xkb_use_extension_cookie_t xkb_cookie;
-    xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
-    xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
 
     /* connect to the X server */
     display.xcb = xcb_connect(NULL, &screen_index);
@@ -272,7 +273,26 @@ void open_display(void)
 /* Handle an error that occured. */
 static void handle_error(xcb_generic_error_t *error)
 {
-    notef("error: %u\n", error->error_code);
+    static xcb_errors_context_t *context;
+    const char *major, *minor, *string, *extension;
+
+    if (context == NULL) {
+        if (xcb_errors_context_new(display.xcb, &context) != 0) {
+            /* connection state error or memory error */
+            return;
+        }
+    }
+    major = xcb_errors_get_name_for_major_code(context, error->major_code);
+    minor = xcb_errors_get_name_for_minor_code(context, error->major_code, error->minor_code);
+    string = xcb_errors_get_name_for_error(context, error->error_code, &extension);
+    if (extension == NULL) {
+        extension = "core";
+    }
+    if (minor == NULL) {
+        notef("%s error caused by %s: %s\n", extension, major, string);
+    } else {
+        notef("%s error caused by %s:%s: %s\n", extension, major, minor, string);
+    }
 }
 
 /* Handle an event by the RandR extension. */
