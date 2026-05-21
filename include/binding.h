@@ -13,12 +13,8 @@
 
 #include "action.h"
 
-#ifdef DEBUG
-
 /* Dump all bindings created to stdout. */
-void debug_dump_bindings(void);
-
-#endif
+void dump_bindings(void);
 
 /* Clear all bindings. */
 void clear_bindings(void);

@@ -11,9 +11,10 @@ check_configuration_path() {
                 echo XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2"
                 return 1
             fi
-            break
+            return 0
         esac
     done < <(XDG_CONFIG_HOME="$1" XDG_CONFIG_DIRS="$2" "$SMOKE_WM" 2>/dev/null)
+    return 1
 }
 
 # Collect all files/directories we create and delete them at exit

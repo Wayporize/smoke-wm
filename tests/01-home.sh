@@ -10,9 +10,10 @@ check_home() {
                 echo "home is not $2"
                 return 1
             fi
-            break
+            return 0
         esac
     done < <(HOME="$1" "$SMOKE_WM" 2>/dev/null)
+    return 1
 }
 
 # Check a few names, they must match

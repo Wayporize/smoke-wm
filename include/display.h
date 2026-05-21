@@ -20,6 +20,9 @@ struct display {
     /* the window used for WM_Sn selection management */
     xcb_window_t wm_sn_window;
 
+    /* base event for randr events */
+    uint8_t randr_base_event, randr_base_error;
+
     /* xkb event and error identifiers */
     uint8_t xkb_base_event, xkb_base_error;
     /* id of the core keyboard device */
@@ -60,10 +63,7 @@ enum wm_ownership_status {
     WM_OWNERSHIP_TIMEOUT,
 };
 
-/* Try to become the window manager on the current X11 connection.
- *
- * If this fails, the program exits.
- */
+/* Try to become the window manager on the current X11 connection. */
 enum wm_ownership_status take_wm_ownership(void);
 
 /* Handle incoming events on the X11 connection.

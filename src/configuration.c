@@ -37,8 +37,6 @@ struct wm Configuration_default = {
     .border.color.inactive.blue = 0xffff
 };
 
-#ifdef DEBUG
-
 /* Print the given color as four lines to stdout and prefix each with @prefix.
  */
 static void print_color(const char *prefix, xcb_render_color_t *color)
@@ -87,7 +85,7 @@ static void print_layout(enum tiling_layout layout)
 }
 
 /* Dump all configuration options to stdout. */
-void debug_dump_configuration(struct wm *wm)
+void dump_configuration(struct wm *wm)
 {
     printf("tiling.");
     print_layout(wm->tiling.layout);
@@ -149,8 +147,6 @@ void debug_dump_configuration(struct wm *wm)
         printf("TODO: action, value\n");
     }
 }
-
-#endif
 
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm)

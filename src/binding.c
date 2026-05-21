@@ -62,15 +62,13 @@ static xkb_mod_mask_t adjust_modifiers(xkb_mod_mask_t modifiers)
     return modifiers;
 }
 
-#ifdef DEBUG
-
 /* Create a gap in the bits @modifiers at the LOCK mask. */
-#define DEBUG_REVERSE_ADJUST(modifiers) \
+#define REVERSE_ADJUST_MODIFIERS(modifiers) \
     ((modifiers & (XCB_MOD_MASK_LOCK - 1)) | \
             ((modifiers & ~(XCB_MOD_MASK_LOCK - 1)) << 1))
 
 /* Dump all bindings created to `stdout`. */
-void debug_dump_bindings(void)
+void dump_bindings(void)
 {
     struct binding *binding;
 
@@ -78,10 +76,10 @@ void debug_dump_bindings(void)
         for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
             if (binding->press_actions != NULL) {
-                printf("KP %u %u\n", DEBUG_REVERSE_ADJUST(m), kc + 8);
+                printf("KP %u %u\n", REVERSE_ADJUST_MODIFIERS(m), kc + 8);
             }
             if (binding->release_actions != NULL) {
-                printf("KR %u %u\n", DEBUG_REVERSE_ADJUST(m), kc + 8);
+                printf("KR %u %u\n", REVERSE_ADJUST_MODIFIERS(m), kc + 8);
             }
         }
     }
@@ -90,16 +88,14 @@ void debug_dump_bindings(void)
         for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
             binding = &button_bindings[b][m];
             if (binding->press_actions != NULL) {
-                printf("BP %u %u\n", DEBUG_REVERSE_ADJUST(m), b);
+                printf("BP %u %u\n", REVERSE_ADJUST_MODIFIERS(m), b);
             }
             if (binding->release_actions != NULL) {
-                printf("BR %u %u\n", DEBUG_REVERSE_ADJUST(m), b);
+                printf("BR %u %u\n", REVERSE_ADJUST_MODIFIERS(m), b);
             }
         }
     }
 }
-
-#endif
 
 /* Clear all bindings. */
 void clear_bindings(void)
