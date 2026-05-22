@@ -70,12 +70,7 @@ fi
 
 kill "$xterm_pid2"
 
-# the focus returns to the root
-# TODO: it should return to the other window
-wait_for_line "focus changed to $root_id"
-
-xdotool windowfocus "$window_id"
-
+# the focus returns to the other window again
 wait_for_line "focus changed to $window_id"
 
 # focus is not allowed to change away
