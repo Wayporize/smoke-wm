@@ -140,7 +140,6 @@ void handle_map_request(xcb_map_request_event_t *event)
             xcb_icccm_get_wm_protocols_reply_wipe(&protocols);
         }
 
-
         set_initial_size(window);
 
         notef("configuring window %#x to "
@@ -167,6 +166,7 @@ void handle_map_request(xcb_map_request_event_t *event)
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
         xcb_map_window(display.xcb, event->window);
 
+        /* send a client message if the `WM_TAKE_FOCUS` protocol is supported */
         if (window->protocols.has_wm_take_focus) {
             xcb_client_message_event_t message;
 
@@ -186,6 +186,8 @@ void handle_map_request(xcb_map_request_event_t *event)
                     event->window, display.last_timestamp);
         }
         xcb_flush(display.xcb);
+    } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
+        /* TODO: the window goes into iconic mode */
     }
 }
 
@@ -224,6 +226,7 @@ void handle_configure_request(xcb_configure_request_event_t *event)
 void report_focus_change(xcb_window_t window)
 {
     notef("focus changed to %#" PRIx32 "\n", window);
+    focused_window = window;
 }
 
 /* Unregister a window. */
