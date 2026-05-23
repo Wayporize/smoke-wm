@@ -5,8 +5,9 @@
 #include <unistd.h>
 #include <utility/log.h>
 
-#include <xcb/xkb.h>
 #include <xcb/randr.h>
+#include <xcb/xcb_errors.h>
+#include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
@@ -179,16 +180,24 @@ void open_display(void)
     const xcb_setup_t *setup;
     xcb_screen_iterator_t iterator;
 
-    char *wm_sn_atom_name;
-    const char *const manager_atom_name = "MANAGER";
-    xcb_intern_atom_cookie_t wm_sn_atom_cookie, manager_atom_cookie;
-    xcb_intern_atom_reply_t *wm_sn_atom_reply, *manager_atom_reply;
-
     xcb_randr_get_screen_resources_cookie_t randr_cookie;
 
     xcb_xkb_use_extension_cookie_t xkb_cookie;
     xcb_xkb_get_device_info_cookie_t xkb_device_cookie;
     xcb_xkb_per_client_flags_cookie_t xkb_client_cookie;
+
+    struct intern_atom {
+        const char *name;
+        xcb_atom_t *target;
+        xcb_intern_atom_cookie_t cookie;
+    } intern_atoms[] = {
+        /* the `%u` becomes the screen number */
+        { .name = "WM_S%u", .target = &display.wm_sn_atom },
+        { .name = "MANAGER", .target = &display.manager_atom },
+
+        { .name = "WM_PROTOCOLS", .target = &display.wm_protocols },
+        { .name = "WM_TAKE_FOCUS", .target = &display.wm_take_focus },
+    };
 
     /* connect to the X server */
     display.xcb = xcb_connect(NULL, &screen_index);
@@ -207,15 +216,19 @@ void open_display(void)
         }
     }
 
+    /* prefetch extensions */
     xcb_prefetch_extension_data(display.xcb, &xcb_randr_id);
     xcb_prefetch_extension_data(display.xcb, &xcb_xkb_id);
 
-    /* prefetch the WM_Sn atom and MANAGER atom */
-    wm_sn_atom_name = xasprintf("WM_S%u", display.screen_index);
-    wm_sn_atom_cookie = xcb_intern_atom(display.xcb, false,
+    /* prefetch all atoms */
+    char *const wm_sn_atom_name = xasprintf(intern_atoms[0].name, display.screen_index);
+    intern_atoms[0].cookie = xcb_intern_atom(display.xcb, false,
             strlen(wm_sn_atom_name), wm_sn_atom_name);
-    manager_atom_cookie = xcb_intern_atom(display.xcb, false,
-            strlen(manager_atom_name), manager_atom_name);
+    free(wm_sn_atom_name);
+    for (size_t i = 1; i < SIZE(intern_atoms); i++) {
+        intern_atoms[i].cookie = xcb_intern_atom(display.xcb, false,
+            strlen(intern_atoms[i].name), intern_atoms[i].name);
+    }
 
     randr_cookie = xcb_randr_get_screen_resources(display.xcb, display.root);
 
@@ -233,21 +246,15 @@ void open_display(void)
             XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT,
             0, 0, 0);
 
-    /* get the value of the WM_Sn atom */
-    wm_sn_atom_reply = xcb_intern_atom_reply(display.xcb, wm_sn_atom_cookie,
-            NULL);
-    ASSERT(wm_sn_atom_reply != NULL, "could not intern %s atom\n",
-            wm_sn_atom_name);
-    free(wm_sn_atom_name);
-    display.wm_sn_atom = wm_sn_atom_reply->atom;
-    free(wm_sn_atom_reply);
-    /* get the value of the MANAGER atom */
-    manager_atom_reply = xcb_intern_atom_reply(display.xcb, manager_atom_cookie,
-            NULL);
-    ASSERT(manager_atom_reply != NULL, "could not intern %s atom\n",
-            manager_atom_name);
-    display.manager_atom = manager_atom_reply->atom;
-    free(manager_atom_reply);
+    /* get the value of all atoms */
+    for (size_t i = 0; i < SIZE(intern_atoms); i++) {
+        xcb_intern_atom_reply_t *atom_reply;
+
+        atom_reply = xcb_intern_atom_reply(display.xcb, intern_atoms[i].cookie, NULL);
+        ASSERT(atom_reply != NULL, "could not intern %s atom\n", intern_atoms[i].name);
+        *(intern_atoms[i].target) = atom_reply->atom;
+        free(atom_reply);
+    }
 
     initialize_randr(randr_cookie);
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
@@ -256,7 +263,9 @@ void open_display(void)
      * listen for property notifications to get server timestamps
      */
     const uint32_t root_mask = XCB_CW_EVENT_MASK;
-    const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+    const uint32_t root_attributes[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+    };
     xcb_change_window_attributes(display.xcb, display.root,
             root_mask, root_attributes);
 }
@@ -264,7 +273,26 @@ void open_display(void)
 /* Handle an error that occured. */
 static void handle_error(xcb_generic_error_t *error)
 {
-    notef("error: %u\n", error->error_code);
+    static xcb_errors_context_t *context;
+    const char *major, *minor, *string, *extension;
+
+    if (context == NULL) {
+        if (xcb_errors_context_new(display.xcb, &context) != 0) {
+            /* connection state error or memory error */
+            return;
+        }
+    }
+    major = xcb_errors_get_name_for_major_code(context, error->major_code);
+    minor = xcb_errors_get_name_for_minor_code(context, error->major_code, error->minor_code);
+    string = xcb_errors_get_name_for_error(context, error->error_code, &extension);
+    if (extension == NULL) {
+        extension = "core";
+    }
+    if (minor == NULL) {
+        notef("%s error caused by %s: %s\n", extension, major, string);
+    } else {
+        notef("%s error caused by %s:%s: %s\n", extension, major, minor, string);
+    }
 }
 
 /* Handle an event by the RandR extension. */
@@ -430,7 +458,7 @@ static xcb_window_t change_selection_owner_event_mask_to_destruction(
 
         const uint32_t manager_mask = XCB_CW_EVENT_MASK;
         const uint32_t manager_attributes[] = {
-            XCB_EVENT_MASK_STRUCTURE_NOTIFY
+            XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_FOCUS_CHANGE
         };
         xcb_change_window_attributes(display.xcb, owner,
                 manager_mask, manager_attributes);
@@ -499,7 +527,6 @@ enum wm_ownership_status take_wm_ownership(void)
     xcb_timestamp_t timestamp;
     xcb_window_t owner, previous_owner;
     enum wm_ownership_status status = WM_OWNERSHIP_SUCCESS;
-    xcb_client_message_event_t message;
     xcb_void_cookie_t cookie;
     xcb_generic_error_t *error;
 
@@ -515,6 +542,8 @@ enum wm_ownership_status take_wm_ownership(void)
             previous_owner, display.wm_sn_atom);
 
     timestamp = get_server_timestamp();
+    /* take this opportunity to initialize the timestamp */
+    display.last_timestamp = timestamp;
     xcb_set_selection_owner(display.xcb, display.wm_sn_window,
             display.wm_sn_atom, timestamp);
 
@@ -541,6 +570,8 @@ enum wm_ownership_status take_wm_ownership(void)
         notef("a third manager interferred, can not take over\n");
         status = WM_OWNERSHIP_INTERFERRED;
     } else {
+        xcb_client_message_event_t message;
+
         /* send out a client message to announce that we are the new owner
          */
         message.response_type = XCB_CLIENT_MESSAGE;
@@ -557,6 +588,7 @@ enum wm_ownership_status take_wm_ownership(void)
         const uint32_t managed_root_mask = XCB_CW_EVENT_MASK;
         const uint32_t managed_root_attributes[] = {
             XCB_EVENT_MASK_PROPERTY_CHANGE |
+            XCB_EVENT_MASK_FOCUS_CHANGE |
             XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
         };
@@ -657,7 +689,9 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             event->selection == display.wm_sn_atom) {
         /* property change events are needed to get the server timestamp */
         const uint32_t root_mask = XCB_CW_EVENT_MASK;
-        const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+        const uint32_t root_attributes[] = {
+            XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+        };
         xcb_change_window_attributes(display.xcb, display.root,
                 root_mask, root_attributes);
 
@@ -697,33 +731,74 @@ void handle_server_events(void)
             status = 0;
 
             switch (event->response_type) {
-            case XCB_SELECTION_CLEAR:
+            case XCB_SELECTION_CLEAR: /* we might have lost the manager selection */
                 handle_selection_clear((xcb_selection_clear_event_t*) event);
                 break;
 
-            case XCB_CREATE_NOTIFY:
+            case XCB_CREATE_NOTIFY: /* a window was created */
                 create_window((xcb_create_notify_event_t*) event);
                 break;
 
-            case XCB_PROPERTY_NOTIFY:
+            case XCB_PROPERTY_NOTIFY: /* a window property changed */
                 change_property((xcb_property_notify_event_t*) event);
                 break;
 
-            case XCB_CONFIGURE_REQUEST:
+            case XCB_CONFIGURE_REQUEST: /* a window wants to be configured */
                 handle_configure_request((xcb_configure_request_event_t*) event);
                 break;
 
-            case XCB_MAP_REQUEST:
+            case XCB_MAP_REQUEST: /* a window wants to be shown on screen */
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
 
-            case XCB_DESTROY_NOTIFY:
+            case XCB_FOCUS_IN: { /* a window gained focus */
+                xcb_focus_in_event_t *focus;
+
+                focus = (xcb_focus_in_event_t*) event;
+                /* other modes are related to grabs which are just temporary
+                 * which does not concern us for now
+                 */
+                if (focus->mode == XCB_NOTIFY_MODE_NORMAL) {
+                    /* the window got directly focused */
+                    if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
+                            /* "virtual" means an inferior got focused but not the
+                             * window itself
+                             */
+                            ((focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
+                                focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL) &&
+                                /* if the root is focused here this means a
+                                 * child top level will be focused
+                                 */
+                                focus->event != display.root) ||
+                            /* the focus might have reverted with `FOCUS_PARENT`
+                             * or other edge cases that were not considered...
+                             */
+                            focus->detail == XCB_NOTIFY_DETAIL_INFERIOR ||
+                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR ||
+                            /* the window with the pointer on it was focused
+                             * because the focused window lost focus
+                             */
+                            focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
+                        /* the truest "focus changed from A to B" event */
+                        report_focus_change(focus->event);
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
+                            focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
+                        /* TODO: the root or None got focused, delegate the
+                         * focus to a different window
+                         */
+                    }
+                }
+                break;
+            }
+
+            case XCB_DESTROY_NOTIFY: /* a window was destroyed */
                 destroy_window((xcb_destroy_notify_event_t*) event);
                 break;
 
-            case XCB_MAP_NOTIFY:
-            case XCB_UNMAP_NOTIFY:
-            case XCB_CONFIGURE_NOTIFY:
+            case XCB_MAP_NOTIFY: /* a window was shown */
+            case XCB_UNMAP_NOTIFY: /* a window was hidden */
+            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+            case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;
 

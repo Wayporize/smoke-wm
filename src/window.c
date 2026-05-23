@@ -11,11 +11,14 @@
 /* list of all windows */
 STATIC_LIST(struct window_cache, windows);
 
+/* the currently focused window */
+static xcb_window_t focused_window;
+
 /* empty window */
 static struct window_cache null_window;
 
 /* Get a window cache by given X11 window id. */
-struct window_cache *get_window_by_id(xcb_window_t id)
+static struct window_cache *get_window_by_id(xcb_window_t id)
 {
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i].id == id) {
@@ -30,21 +33,24 @@ struct window_cache *get_window_by_id(xcb_window_t id)
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event)
 {
-    const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
+    const uint32_t values[] = {
+        XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
+    };
     xcb_change_window_attributes(display.xcb, event->window,
             XCB_CW_EVENT_MASK, values);
 
     const struct window_cache window = {
         .id = event->window,
         .x = event->x, .y = event->y,
-        .width = event->width, .height = event->height
+        .width = event->width, .height = event->height,
+        .state = XCB_ICCCM_WM_STATE_NEW
     };
     LIST_APPEND_VALUE(windows, window);
 
     notef("window %#x creation registered\n", event->window);
 }
 
-/* Change a property of a window. */
+/* Notify of a property change in a window. */
 void change_property(xcb_property_notify_event_t *event)
 {
     struct window_cache *window;
@@ -55,113 +61,117 @@ void change_property(xcb_property_notify_event_t *event)
     }
 
     window = get_window_by_id(event->window);
-
-#define REINSTANTIATE(atom_name, variable_name, function_name) \
-    if (event->atom == atom_name) { \
-        xcb_discard_reply(display.xcb, window->variable_name.cookie.sequence); \
-        free(window->variable_name.reply); \
-        window->variable_name.reply = NULL; \
-        window->variable_name.cookie = function_name(display.xcb, event->window); \
-    }
-
-    REINSTANTIATE(XCB_ATOM_WM_NORMAL_HINTS, wm_normal_hints, xcb_icccm_get_wm_normal_hints)
-    else REINSTANTIATE(XCB_ATOM_WM_HINTS, wm_hints, xcb_icccm_get_wm_hints)
-
-#undef REINSTANTIATE
-}
-
-/* Update a specific window property. */
-int update_property(struct window_property *property)
-{
-    if (property->cookie.sequence != 0) {
-        property->reply = xcb_get_property_reply(display.xcb,
-                property->cookie, NULL);
-        property->cookie.sequence = 0;
-    }
-
-    if (property->reply == NULL) {
-        return 1;
-    } else {
-        return 0;
-    }
+    (void) window;
+    /* TODO: react to name changes and what not */
 }
 
 /* Set an initial size using given size hints. */
-static void set_initial_size(struct window_cache *window, xcb_size_hints_t *hints)
+static void set_initial_size(struct window_cache *window)
 {
-    if ((hints->flags & XCB_ICCCM_SIZE_HINT_US_POSITION)) {
-        window->x = hints->x;
-        window->y = hints->y;
-    } else if ((hints->flags & XCB_ICCCM_SIZE_HINT_P_POSITION)) {
-        window->x = hints->x;
-        window->y = hints->y;
+    if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_US_POSITION)) {
+        window->x = window->normal_hints.x;
+        window->y = window->normal_hints.y;
+    /* TODO: else choose a reasonable position or use the auto tiling */
+    } else if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_P_POSITION)) {
+        window->x = window->normal_hints.x;
+        window->y = window->normal_hints.y;
     } else {
         window->x = 0;
         window->y = 0;
     }
 
-    if ((hints->flags & XCB_ICCCM_SIZE_HINT_US_SIZE)) {
-        window->width = hints->width;
-        window->height = hints->height;
-    } else if ((hints->flags & XCB_ICCCM_SIZE_HINT_P_SIZE)) {
-        window->width = hints->width;
-        window->height = hints->height;
-    } else if ((hints->flags & XCB_ICCCM_SIZE_HINT_BASE_SIZE)) {
-        window->width = hints->base_width;
-        window->height = hints->base_height;
+    if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_US_SIZE)) {
+        window->width = window->normal_hints.width;
+        window->height = window->normal_hints.height;
+    /* TODO: else choose a reasonable size or use the auto tiling */
+    } else if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_P_SIZE)) {
+        window->width = window->normal_hints.width;
+        window->height = window->normal_hints.height;
+    } else if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_BASE_SIZE)) {
+        window->width = window->normal_hints.base_width;
+        window->height = window->normal_hints.base_height;
+    } else if ((window->normal_hints.flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE)) {
+        window->width = window->normal_hints.min_width;
+        window->height = window->normal_hints.min_height;
     } else {
-        window->width = hints->min_width;
-        window->height = hints->min_height;
+        window->width = 16;
+        window->height = 9;
     }
+}
+
+/* Focus a specific window in the X world.
+ *
+ * @return 0 if the window is focusable, 1 otherwise.
+ */
+static int focus_window(struct window_cache *window)
+{
+    /* send a client message if the `WM_TAKE_FOCUS` protocol is supported */
+    if (window->protocols.has_wm_take_focus) {
+        xcb_client_message_event_t message;
+
+        message.response_type = XCB_CLIENT_MESSAGE;
+        message.window = window->id;
+        message.format = 32;
+        message.type = display.wm_protocols;
+        message.data.data32[0] = display.wm_take_focus;
+        message.data.data32[1] = display.last_timestamp;
+        xcb_send_event(display.xcb, false, window->id,
+                XCB_EVENT_MASK_NO_EVENT, (char*) &message);
+        return 0;
+    /* check if the window needs us to focus it directly */
+    } else if (((window->hints.flags & XCB_ICCCM_WM_HINT_INPUT) && window->hints.input) ||
+                /* assume input = true if missing */
+                !(window->hints.flags & XCB_ICCCM_WM_HINT_INPUT)) {
+        /* `FOCUS_NONE` for full manual management */
+        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE,
+                window->id, display.last_timestamp);
+        return 0;
+    }
+    return 1;
 }
 
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event)
 {
     struct window_cache *window;
-    xcb_icccm_wm_hints_t hints;
-    xcb_size_hints_t size_hints;
-    xcb_icccm_wm_state_t old_state;
 
     notef("got map request for %#x\n", event->window);
 
     window = get_window_by_id(event->window);
 
-    if (update_property(&window->wm_hints) != 0 ||
-            !xcb_icccm_get_wm_hints_from_reply(&hints,
-                window->wm_hints.reply)) {
-        ZERO(&hints, 1);
-    }
+    /* check if the window is mapped for the first time */
+    if (window->state == XCB_ICCCM_WM_STATE_NEW) {
+        xcb_get_property_cookie_t hints_cookie, normal_hints_cookie, protocols_cookie;
+        xcb_icccm_get_wm_protocols_reply_t protocols;
 
-    if (update_property(&window->wm_normal_hints) != 0 ||
-            !xcb_icccm_get_wm_size_hints_from_reply(&size_hints,
-                window->wm_normal_hints.reply)) {
-        ZERO(&size_hints, 1);
-    }
+        hints_cookie = xcb_icccm_get_wm_hints(display.xcb, event->window);
+        normal_hints_cookie = xcb_icccm_get_wm_normal_hints(display.xcb, event->window);
+        protocols_cookie = xcb_icccm_get_wm_protocols(display.xcb, event->window, display.wm_protocols);
 
-    old_state = window->state;
-    if (window->state == XCB_ICCCM_WM_STATE_WITHDRAWN) {
-        if ((hints.flags & XCB_ICCCM_WM_HINT_STATE)) {
-            window->state = hints.initial_state;
-        } else {
-            window->state = XCB_ICCCM_WM_STATE_NORMAL;
+        (void) xcb_icccm_get_wm_hints_reply(display.xcb, hints_cookie, &window->hints, NULL);
+        (void) xcb_icccm_get_wm_normal_hints_reply(display.xcb, normal_hints_cookie, &window->normal_hints, NULL);
+        if (xcb_icccm_get_wm_protocols_reply(display.xcb, protocols_cookie, &protocols, NULL)) {
+            for (uint32_t i = 0; i < protocols.atoms_len; i++) {
+                if (protocols.atoms[i] == display.wm_take_focus) {
+                    window->protocols.has_wm_take_focus = true;
+                    notef("window supports WM_TAKE_FOCUS\n");
+                }
+            }
+            xcb_icccm_get_wm_protocols_reply_wipe(&protocols);
         }
-    } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
-        window->state = XCB_ICCCM_WM_STATE_NORMAL;
-    }
 
-    notef("%#x: (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), %u\n",
-            size_hints.flags, size_hints.x, size_hints.y,
-            size_hints.width, size_hints.height,
-            size_hints.min_width, size_hints.min_height,
-            size_hints.max_width, size_hints.max_height,
-            size_hints.width_inc, size_hints.height_inc,
-            size_hints.min_aspect_num, size_hints.min_aspect_den,
-            size_hints.max_aspect_num, size_hints.max_aspect_den,
-            size_hints.base_width, size_hints.base_height, size_hints.win_gravity);
+        notef("normal hints: %#x: (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), (%u, %u), %u\n",
+                window->normal_hints.flags, window->normal_hints.x, window->normal_hints.y,
+                window->normal_hints.width, window->normal_hints.height,
+                window->normal_hints.min_width, window->normal_hints.min_height,
+                window->normal_hints.max_width, window->normal_hints.max_height,
+                window->normal_hints.width_inc, window->normal_hints.height_inc,
+                window->normal_hints.min_aspect_num, window->normal_hints.min_aspect_den,
+                window->normal_hints.max_aspect_num, window->normal_hints.max_aspect_den,
+                window->normal_hints.base_width, window->normal_hints.base_height,
+                window->normal_hints.win_gravity);
 
-    if (old_state == XCB_ICCCM_WM_STATE_WITHDRAWN) {
-        set_initial_size(window, &size_hints);
+        set_initial_size(window);
 
         notef("configuring window %#x to "
                     "%" PRIi32 ", %" PRIi32 ", %" PRIi32 ", %" PRIi32 "\n",
@@ -172,22 +182,26 @@ void handle_map_request(xcb_map_request_event_t *event)
             window->x, window->y, window->width, window->height
         };
         xcb_configure_window(display.xcb, event->window, mask, values);
+
+        window->state = XCB_ICCCM_WM_STATE_NORMAL;
+    } else if (window->state == XCB_ICCCM_WM_STATE_WITHDRAWN) {
+        if ((window->hints.flags & XCB_ICCCM_WM_HINT_STATE)) {
+            window->state = window->hints.initial_state;
+        } else {
+            window->state = XCB_ICCCM_WM_STATE_NORMAL;
+        }
+    } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
+        window->state = XCB_ICCCM_WM_STATE_NORMAL;
     }
 
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
         xcb_map_window(display.xcb, event->window);
-    }
-    xcb_flush(display.xcb);
-
-    /* TODO: check for WM_TAKE_FOCUS protocol */
-    if (window->state == XCB_ICCCM_WM_STATE_NORMAL &&
-            /* check if the window needs us to focus it directly */
-            (((hints.flags & XCB_ICCCM_WM_HINT_INPUT) && hints.input) ||
-                /* assume input = true if missing */
-                !(hints.flags & XCB_ICCCM_WM_HINT_INPUT))) {
-        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_POINTER_ROOT,
-                event->window, XCB_CURRENT_TIME);
+        /* focus the window */
+        /* TODO: do not focus if not wanted per configuration */
+        (void) focus_window(window);
         xcb_flush(display.xcb);
+    } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
+        /* TODO: the window goes into iconic mode */
     }
 }
 
@@ -215,11 +229,42 @@ void handle_configure_request(xcb_configure_request_event_t *event)
 
     synthetic_event->override_redirect = false;
 
-    notef("sending synthetic configure event to %#x\n", event->window);
+    notef("sending synthetic configure event to %#" PRIx32 "\n", event->window);
     xcb_send_event(display.xcb, false, event->window,
             XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) synthetic_event);
     free(synthetic_event);
     xcb_flush(display.xcb);
+}
+
+/* Tell the window module the new focused window. */
+void report_focus_change(xcb_window_t window)
+{
+    notef("focus changed to %#" PRIx32 "\n", window);
+    focused_window = window;
+}
+
+/* Try to focus a window that makes sense or the root if none available.
+ *
+ * @return 0 if a top-level window got focused, otherwise non-zero and the root
+ *         is focused.
+ */
+static int focus_next_available_window(void)
+{
+    /* TODO: this needs to be smarter, it just tries window recency which can
+     * occur to the user as rather random
+     */
+    for (size_t i = windows_length; i > 0; ) {
+        i--;
+        if (windows[i].state == XCB_ICCCM_WM_STATE_NORMAL) {
+            if (focus_window(&windows[i]) == 0) {
+                return 0;
+            }
+        }
+    }
+    /* `FOCUS_NONE` for full manual management */
+    xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE,
+            display.root, display.last_timestamp);
+    return 1;
 }
 
 /* Unregister a window. */
@@ -232,6 +277,10 @@ void destroy_window(xcb_destroy_notify_event_t *event)
         windows_length--;
         const size_t index = window - windows;
         MOVE(window, window + 1, windows_length - index);
+    }
+
+    if (event->window == focused_window) {
+        (void) focus_next_available_window();
     }
 
     notef("window %#x destruction registered\n", event->window);

@@ -3,8 +3,6 @@
 /**
  * This is a simple `override_redirect` window that is mapped and then listens
  * for events without actually doing anything.
- *
- * cc *.c -o * -lX11
  */
 
 int main(void)
@@ -22,7 +20,7 @@ int main(void)
     XMapWindow(display, window);
 
     XEvent event;
-    while (XNextEvent(display, &event), true) {
+    while (XNextEvent(display, &event), True) {
     }
 
     return 0;

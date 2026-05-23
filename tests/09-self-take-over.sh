@@ -32,7 +32,6 @@ wait_for_line() {
 }
 
 XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo1" &
-smoke_wm_pid="$!"
 
 # Wait for the first to take over
 wait_for_line "$fifo1" "taking over"

@@ -13,9 +13,14 @@ struct display {
     /* root window on the active screen */
     xcb_window_t root;
 
-    /* the WM_Sn atom for the current screen */
+    /* last server timestamp usable for `WM_TAKE_FOCUS` client messages and
+     * `SetInputFocus` requests
+     */
+    xcb_timestamp_t last_timestamp;
+
+    /* the `WM_Sn` atom for the current screen */
     xcb_atom_t wm_sn_atom;
-    /* the MANAGER atom */
+    /* the `MANAGER` atom */
     xcb_atom_t manager_atom;
     /* the window used for WM_Sn selection management */
     xcb_window_t wm_sn_window;
@@ -27,6 +32,11 @@ struct display {
     uint8_t xkb_base_event, xkb_base_error;
     /* id of the core keyboard device */
     int32_t keyboard_device_id;
+
+    /* the `WM_PROTOCOLS` atom (list of atoms) */
+    xcb_atom_t wm_protocols;
+    /* the `WM_TAKE_FOCUS` atom (item of above list) */
+    xcb_atom_t wm_take_focus;
 
     /* xkb context */
     struct xkb_context *xkb;

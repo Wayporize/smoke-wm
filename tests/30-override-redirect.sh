@@ -9,11 +9,6 @@ at_exit() {
 }
 trap at_exit INT EXIT
 
-RUN=./build/tests/windows/override_redirect
-
-mkdir -p build/tests/windows
-cc tests/windows/override_redirect.c -o "$RUN" -lX11
-
 # Create temporary fifo
 fifo="/tmp/$$.fifo"
 mkfifo "$fifo"
@@ -31,15 +26,15 @@ wait_for_line() {
     return 1
 }
 
-"$SMOKE_WM" >"$fifo" &
+XDG_CONFIG_HOME=/tmp XDG_CONFIG_DIRS= "$SMOKE_WM" >"$fifo" &
 wait_for_line "taking over"
 
-"$RUN" &
-run_pid="$!"
+"$OVERRIDE_REDIRECT" &
+override_redirect_pid="$!"
 
 wait_for_line "window (0x[0-9a-f]+) creation registered"
 window_id="${BASH_REMATCH[1]}"
 
-kill "$run_pid"
+kill "$override_redirect_pid"
 
 wait_for_line "window $window_id destruction registered"
