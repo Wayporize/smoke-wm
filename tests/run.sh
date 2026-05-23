@@ -29,9 +29,9 @@ at_exit() {
 trap at_exit INT EXIT
 
 if [ "$#" -gt 0 ] ; then
-    tests=./"$1"
+    tests="$*"
 else
-    tests=./tests/[0-9][0-9]*.sh
+    tests=tests/[0-9][0-9]*.sh
 fi
 
 # Run all tests
