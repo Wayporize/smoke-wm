@@ -7,8 +7,6 @@
  * it is old and dumb).
  */
 
-#include "workspace.h"
-
 /* physical output device */
 struct output {
     /* identifier of this output */

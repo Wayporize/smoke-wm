@@ -3,16 +3,6 @@
 
 #include <xcb/xcb_icccm.h>
 
-#include "workspace.h"
-
-/* property pair */
-struct window_property {
-    /* outgoing request to the server or not outgoing if `sequence` is 0 */
-    xcb_get_property_cookie_t cookie;
-    /* reply received from the request or NULL if no reply received yet */
-    xcb_get_property_reply_t *reply;
-};
-
 /* another state for `xcb_icccm_wm_state_t` to indicate the window is new */
 #define XCB_ICCCM_WM_STATE_NEW ((xcb_icccm_wm_state_t) 4)
 
@@ -33,8 +23,6 @@ struct window_cache {
     } protocols;
     /* the current window state */
     xcb_icccm_wm_state_t state;
-    /* the workspace this window is on */
-    workspace_t workspace;
 };
 
 /* TODO: Go through all windows that already exist and manage them. */

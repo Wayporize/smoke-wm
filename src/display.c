@@ -372,6 +372,9 @@ static int handle_extension_event(xcb_generic_event_t *event)
         } else if (event->response_type == display.xkb_base_event) {
             handle_xkb_event(event);
             status = 0;
+        } else if (event->response_type == display.randr_base_event) {
+            /* ignore */
+            status = 0;
         /* add `XCB_RANDR_NOTIFY` which is the newer RandR event system */
         } else if (event->response_type == display.randr_base_event + XCB_RANDR_NOTIFY) {
             handle_randr_event(event);
@@ -621,6 +624,9 @@ enum wm_ownership_status take_wm_ownership(void)
         } else {
             /* associated to a few manager tests */
             notef("taking over\n");
+            /* TODO: get current focus */
+            /* TODO: initialize workspaces */
+            /* TODO: query existing windows */
         }
     }
 
@@ -649,6 +655,8 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
 
     /* associated to a few manager tests */
     notef("going dormant\n");
+
+    /* TODO: also make the entire window/workspace module go dormant */
 
     /* listen for destroy notifications on the current owner */
     owner = change_selection_owner_event_mask_to_destruction(owner,
@@ -689,9 +697,7 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             event->selection == display.wm_sn_atom) {
         /* property change events are needed to get the server timestamp */
         const uint32_t root_mask = XCB_CW_EVENT_MASK;
-        const uint32_t root_attributes[] = {
-            XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
-        };
+        const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
         xcb_change_window_attributes(display.xcb, display.root,
                 root_mask, root_attributes);
 
@@ -798,6 +804,9 @@ void handle_server_events(void)
             case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_UNMAP_NOTIFY: /* a window was hidden */
             case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+                /* TODO: react to these two by setting the window state,
+                 * also react to the synthetic event which carries extra meaning
+                 */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;
