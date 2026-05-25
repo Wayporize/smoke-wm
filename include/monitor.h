@@ -1,9 +1,14 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
-#include <xcb/randr.h>
 #include <utility/attributes.h>
 #include <utility/types.h>
+
+#ifdef TEST_RANDR
+# include "../tests/fake-randr.h"
+#else
+# include <xcb/randr.h>
+#endif
 
 /* Screen/Monitor management using the XRandr extension (not Xinerama because
  * it is old and dumb).
