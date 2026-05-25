@@ -7,12 +7,10 @@
 
 #include "display.h"
 #include "window.h"
+#include "workspace.h"
 
 /* list of all windows */
 STATIC_LIST(struct window_cache, windows);
-
-/* the currently focused window */
-static xcb_window_t focused_window;
 
 /* empty window */
 static struct window_cache null_window;
@@ -48,6 +46,18 @@ void create_window(xcb_create_notify_event_t *event)
     LIST_APPEND_VALUE(windows, window);
 
     notef("window %#x creation registered\n", event->window);
+}
+
+/* Get the cached position and size of given X window. */
+void get_window_rectangle(xcb_window_t id, struct rectangle *rectangle)
+{
+    struct window_cache *window;
+
+    window = get_window_by_id(id);
+    rectangle->x = window->x;
+    rectangle->y = window->y;
+    rectangle->width = window->width;
+    rectangle->height = window->height;
 }
 
 /* Notify of a property change in a window. */
@@ -134,6 +144,7 @@ static int focus_window(struct window_cache *window)
 void handle_map_request(xcb_map_request_event_t *event)
 {
     struct window_cache *window;
+    bool is_visible, is_workspace_visible;
 
     notef("got map request for %#x\n", event->window);
 
@@ -144,9 +155,9 @@ void handle_map_request(xcb_map_request_event_t *event)
         xcb_get_property_cookie_t hints_cookie, normal_hints_cookie, protocols_cookie;
         xcb_icccm_get_wm_protocols_reply_t protocols;
 
-        hints_cookie = xcb_icccm_get_wm_hints(display.xcb, event->window);
-        normal_hints_cookie = xcb_icccm_get_wm_normal_hints(display.xcb, event->window);
-        protocols_cookie = xcb_icccm_get_wm_protocols(display.xcb, event->window, display.wm_protocols);
+        hints_cookie = xcb_icccm_get_wm_hints(display.xcb, window->id);
+        normal_hints_cookie = xcb_icccm_get_wm_normal_hints(display.xcb, window->id);
+        protocols_cookie = xcb_icccm_get_wm_protocols(display.xcb, window->id, display.wm_protocols);
 
         (void) xcb_icccm_get_wm_hints_reply(display.xcb, hints_cookie, &window->hints, NULL);
         (void) xcb_icccm_get_wm_normal_hints_reply(display.xcb, normal_hints_cookie, &window->normal_hints, NULL);
@@ -175,13 +186,13 @@ void handle_map_request(xcb_map_request_event_t *event)
 
         notef("configuring window %#x to "
                     "%" PRIi32 ", %" PRIi32 ", %" PRIi32 ", %" PRIi32 "\n",
-                event->window, window->x, window->y, window->width, window->height);
+                window->id, window->x, window->y, window->width, window->height);
         const uint16_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
             XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
         const uint32_t values[] = {
             window->x, window->y, window->width, window->height
         };
-        xcb_configure_window(display.xcb, event->window, mask, values);
+        xcb_configure_window(display.xcb, window->id, mask, values);
 
         window->state = XCB_ICCCM_WM_STATE_NORMAL;
     } else if (window->state == XCB_ICCCM_WM_STATE_WITHDRAWN) {
@@ -195,14 +206,23 @@ void handle_map_request(xcb_map_request_event_t *event)
     }
 
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
-        xcb_map_window(display.xcb, event->window);
-        /* focus the window */
+        is_visible = true;
+    } else {
+        is_visible = false;
+    }
+
+    is_workspace_visible = add_window_to_workspace(WORKSPACE_NONE, window->id);
+    if (is_visible && is_workspace_visible) {
+        xcb_map_window(display.xcb, window->id);
         /* TODO: do not focus if not wanted per configuration */
         (void) focus_window(window);
-        xcb_flush(display.xcb);
-    } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
+    }
+
+    if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
         /* TODO: the window goes into iconic mode */
     }
+
+    xcb_flush(display.xcb);
 }
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
@@ -236,13 +256,6 @@ void handle_configure_request(xcb_configure_request_event_t *event)
     xcb_flush(display.xcb);
 }
 
-/* Tell the window module the new focused window. */
-void report_focus_change(xcb_window_t window)
-{
-    notef("focus changed to %#" PRIx32 "\n", window);
-    focused_window = window;
-}
-
 /* Try to focus a window that makes sense or the root if none available.
  *
  * @return 0 if a top-level window got focused, otherwise non-zero and the root
@@ -272,6 +285,8 @@ void destroy_window(xcb_destroy_notify_event_t *event)
 {
     struct window_cache *window;
 
+    remove_window_from_workspace(event->window);
+
     window = get_window_by_id(event->window);
     if (window != &null_window) {
         windows_length--;
@@ -279,7 +294,7 @@ void destroy_window(xcb_destroy_notify_event_t *event)
         MOVE(window, window + 1, windows_length - index);
     }
 
-    if (event->window == focused_window) {
+    if (event->window == display.focus) {
         (void) focus_next_available_window();
     }
 

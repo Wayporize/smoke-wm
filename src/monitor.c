@@ -5,6 +5,7 @@
 
 #include "display.h"
 #include "monitor.h"
+#include "workspace.h"
 
 /* list of output devices the user has */
 STATIC_LIST(struct output, outputs);
@@ -139,6 +140,81 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
     notef("start of dumping monitor setup\n");
     dump_monitor_setup();
     notef("end of dumping monitor setup\n");
+
+    const struct rectangle old_rectangle = { 0, 0, 0, 0 };
+    for (size_t i = 0; i < monitors_length; i++) {
+        const struct rectangle rectangle = {
+            monitors[i].x, monitors[i].y, monitors[i].width, monitors[i].height
+        };
+        report_monitor_change_to_workspaces(monitors[i].id, &old_rectangle, &rectangle);
+    }
+}
+
+/* Get the position and size of a monitor. */
+void get_monitor_rectangle(xcb_randr_crtc_t crtc, struct rectangle *rectangle)
+{
+    for (size_t i = 0; i < monitors_length; i++) {
+        if (monitors[i].id == crtc) {
+            rectangle->x = monitors[i].x;
+            rectangle->y = monitors[i].y;
+            rectangle->width = monitors[i].width;
+            rectangle->height = monitors[i].height;
+        }
+    }
+}
+
+/* Get the overlapping area between two rectangles. */
+static inline int64_t get_overlapping_area(
+        const struct rectangle *a, const struct rectangle *b)
+{
+    int32_t x, y;
+
+    x = MIN(a->x + a->width, b->x + b->width);
+    x -= MAX(a->x, b->x);
+
+    y = MIN(a->y + a->height, b->y + b->height);
+    y -= MAX(a->y, b->y);
+
+    if (x > 0 && y > 0) {
+        return (int64_t) x * y;
+    } else {
+        return 0;
+    }
+}
+
+/* Get the monitor that intersects given rectangle most. */
+xcb_randr_crtc_t get_monitor_from_rectangle(const struct rectangle *rectangle)
+{
+    xcb_randr_crtc_t best_crtc = XCB_NONE;
+    int64_t best_area = 0;
+    struct rectangle monitor_rectangle;
+
+    const int32_t center_x = rectangle->x + rectangle->width / 2;
+    const int32_t center_y = rectangle->y + rectangle->height / 2;
+    for (size_t i = 0; i < monitors_length; i++) {
+        monitor_rectangle.x = monitors[i].x;
+        monitor_rectangle.y = monitors[i].y;
+        monitor_rectangle.width = monitors[i].width;
+        monitor_rectangle.height = monitors[i].height;
+
+        /* check if the midpoint is inside the monitor */
+        const int32_t relative_x = center_x - monitor_rectangle.x;
+        const int32_t relative_y = center_y - monitor_rectangle.y;
+        if (relative_x >= 0 && relative_y >= 0 &&
+                relative_x < monitor_rectangle.width &&
+                relative_y < monitor_rectangle.height) {
+            return monitors[i].id;
+        }
+
+        /* check if the overlapping is bigger than before */
+        const int64_t area = get_overlapping_area(rectangle, &monitor_rectangle);
+        if (area > best_area) {
+            best_area = area;
+            best_crtc = monitors[i].id;
+        }
+    }
+
+    return best_crtc;
 }
 
 /* Cache output properties. */
@@ -195,6 +271,8 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_c
 void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotation_t rotation,
         int32_t x, int32_t y, int32_t width, int32_t height)
 {
+    struct rectangle old_rectangle;
+    struct rectangle new_rectangle;
     struct monitor *info;
 
     notef("randr: crtc %" PRIu32 " changed: %" PRIu32 " %u %" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 "\n",
@@ -206,32 +284,33 @@ void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotatio
         LIST_APPEND(monitors, NULL, 1);
         info = &monitors[monitors_length - 1];
         info->id = crtc;
-        info->mode = mode;
-        info->rotation = rotation;
+    }
+
+    if (info->mode == XCB_NONE) {
+        ZERO(&old_rectangle, 1);
+    } else {
+        old_rectangle.x = info->x;
+        old_rectangle.y = info->y;
+        old_rectangle.width = info->width;
+        old_rectangle.height = info->height;
+    }
+
+    if (mode == XCB_NONE) {
+        ZERO(&new_rectangle, 1);
+    } else {
+        new_rectangle.x = x;
+        new_rectangle.y = y;
+        new_rectangle.width = width;
+        new_rectangle.height = height;
+
         info->x = x;
         info->y = y;
         info->width = width;
         info->height = height;
-        /* TODO: new content might be visible now */
-    } else {
-        /* TODO: the size might have changed, need to adjust tiling windows and
-         * put windows in bounds
-         */
-        if (mode == XCB_NONE) {
-            /* TODO: delete this crtc? */
-            info->mode = mode;
-            info->rotation = rotation;
-            /* do not set the position and size here! */
-        } else {
-            /* TODO: if the previous mode was `XCB_NONE`, there might be some
-             * new visible content now
-             */
-            info->mode = mode;
-            info->rotation = rotation;
-            info->x = x;
-            info->y = y;
-            info->width = width;
-            info->height = height;
-        }
     }
+
+    info->mode = mode;
+    info->rotation = rotation;
+
+    report_monitor_change_to_workspaces(crtc, &old_rectangle, &new_rectangle);
 }

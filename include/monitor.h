@@ -2,6 +2,8 @@
 #define MONITOR_H
 
 #include <xcb/randr.h>
+#include <utility/attributes.h>
+#include <utility/types.h>
 
 /* Screen/Monitor management using the XRandr extension (not Xinerama because
  * it is old and dumb).
@@ -12,7 +14,7 @@ struct output {
     /* identifier of this output */
     xcb_randr_output_t id;
     /* UTF-8 encoded name of this output device */
-    char *name;
+    utf8_t *name;
     /* crtc projected onto this output */
     xcb_randr_crtc_t crtc;
     /* connection status of this output */
@@ -33,6 +35,16 @@ struct monitor {
 
 /* Initialize the output and monitor list with the current RandR configuration. */
 void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie);
+
+/* Get the position and size of a monitor. */
+void get_monitor_rectangle(xcb_randr_crtc_t crtc, struct rectangle *rectangle);
+
+/* Get the monitor that intersects given rectangle most.
+ *
+ * If the mid point of the rectangle is contained in any monitor, this will have
+ * priority over the interection area.
+ */
+xcb_randr_crtc_t get_monitor_from_rectangle(const struct rectangle *rectangle);
 
 /* Cache output properties. */
 void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc,

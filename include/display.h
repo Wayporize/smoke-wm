@@ -13,6 +13,9 @@ struct display {
     /* root window on the active screen */
     xcb_window_t root;
 
+    /* the currently focused window, focus changes while a window is grabbed */
+    xcb_window_t focus;
+
     /* last server timestamp usable for `WM_TAKE_FOCUS` client messages and
      * `SetInputFocus` requests
      */

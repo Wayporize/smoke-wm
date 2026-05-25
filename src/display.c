@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <utility/log.h>
 
-#include <xcb/randr.h>
 #include <xcb/xcb_errors.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon.h>
@@ -16,6 +15,7 @@
 #include "display.h"
 #include "monitor.h"
 #include "window.h"
+#include "workspace.h"
 
 /* the information retrieved from the X server and Xkb context */
 struct display display;
@@ -786,7 +786,9 @@ void handle_server_events(void)
                              */
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
                         /* the truest "focus changed from A to B" event */
-                        report_focus_change(focus->event);
+                        notef("focus changed to %#" PRIx32 "\n", focus->event);
+                        display.focus = focus->event;
+                        report_focus_change_to_workspaces(display.focus);
                     } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
                         /* TODO: the root or None got focused, delegate the
