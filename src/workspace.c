@@ -5,7 +5,7 @@
 #include "display.h"
 #include "workspace.h"
 
-/* list of all workspaces sorted by their id, each workspace in this list has an
+/* list of all workspaces sorted by their ID, each workspace in this list has an
  * associated monitor
  */
 STATIC_LIST(struct workspace, workspaces);
@@ -85,7 +85,7 @@ void remove_window_from_workspace(xcb_window_t window)
 {
     /* find any workspace this window is on and remove it */
     for (size_t i = 0; i < workspaces_length; i++) {
-        for (size_t j = 0; j < workspaces_length; j++) {
+        for (size_t j = 0; j < workspaces[i].windows_length; j++) {
             if (workspaces[i].windows[j] == window) {
                 workspaces[i].windows_length--;
                 MOVE(&workspaces[i].windows[j], &workspaces[i].windows[j],
@@ -114,24 +114,24 @@ void focus_workspace(workspace_t id)
     if (workspace == NULL) {
         workspace = add_workspace(id);
         workspace->crtc = old_workspace->crtc;
-        /* TODO: go through the config to find the preferred output for this
-         * workspace
-         */
+        /* TODO: get preferred output */
     }
 
+    /* map new windows if the workspace was previously hidden */
     if (workspace->state == WORKSPACE_HIDDEN) {
-        /* map new windows */
         for (size_t i = 0; i < workspace->windows_length; i++) {
             xcb_map_window(display.xcb, workspace->windows[i]);
         }
     }
 
+    /* unmap old windows if the old workspace was on the same monitor */
     if (old_workspace->crtc == workspace->crtc) {
         old_workspace->state = WORKSPACE_HIDDEN;
-        /* unmap old windows */
         for (size_t i = 0; i < old_workspace->windows_length; i++) {
             xcb_unmap_window(display.xcb, old_workspace->windows[i]);
         }
+    } else {
+        old_workspace->state = WORKSPACE_VISIBLE;
     }
 
     workspace->state = WORKSPACE_ACTIVE;
@@ -151,7 +151,6 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
             return;
         }
 
-        /* give this */
         /* TODO: use configuration */
         if (workspaces_length == 0) {
             id = WORKSPACE_FIRST;

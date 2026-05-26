@@ -4,7 +4,7 @@
 #include <utility/attributes.h>
 #include <utility/types.h>
 
-#ifdef TEST_RANDR
+#ifdef FAKE_RANDR
 # include "../tests/fake-randr.h"
 #else
 # include <xcb/randr.h>

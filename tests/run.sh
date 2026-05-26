@@ -12,11 +12,15 @@ test_display="8"
 export DISPLAY=":$test_display"
 # Give called scripts some programs to run
 export SMOKE_WM="./build/smoke-wm"
+export SMOKE_WM_FAKE_RANDR="./build/fake-randr/smoke-wm"
 export OVERRIDE_REDIRECT="./build/tests/windows/override_redirect"
 export WM_TAKE_FOCUS="./build/tests/windows/wm_take_focus"
 
-make "$SMOKE_WM"
-make -f tests/windows/GNUmakefile
+# Speed up compiling by making all at once
+make "$SMOKE_WM" &
+make "C_FLAGS=-DFAKE_RANDR" "SOURCES=tests/fake-randr.c" "BUILD_PREFIX=$(dirname $SMOKE_WM_FAKE_RANDR)" "$SMOKE_WM_FAKE_RANDR" &
+make -f tests/windows/GNUmakefile &
+wait
 
 # Install exit handler
 xephyr_pid=""
@@ -31,7 +35,7 @@ trap at_exit INT EXIT
 if [ "$#" -gt 0 ] ; then
     tests="$*"
 else
-    tests=tests/[0-9][0-9]*.sh
+    tests="tests/[0-9][0-9]*.sh"
 fi
 
 # Run all tests

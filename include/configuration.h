@@ -11,6 +11,7 @@
 
 #include "action.h"
 #include "tiling.h"
+#include "workspace.h"
 #include "window.h"
 
 /* TODO: put me somewhere else */
@@ -39,25 +40,25 @@ extern struct wm {
         /* [wm.tiling.gaps] */
         struct wm_tiling_gaps {
             /* gaps between tiled windows */
-            int inner[4];
+            int32_t inner[4];
             /* gaps between tiled windows and the monitor edges */
-            int outer[4];
+            int32_t outer[4];
         } gaps;
     } tiling;
 
     /* [wm.border] */
     struct wm_border {
         /* size in pixels of the border */
-        int size;
+        int32_t size;
         /* which decoration type to use by default */
         enum border_decoration decoration;
 
         /* [wm.border.radius] */
         struct wm_border_radius {
             /* the radius within the inside of the window */
-            int inner;
+            int32_t inner;
             /* the radius of the outside of the window */
-            int outer;
+            int32_t outer;
         } radius;
 
         /* [wm.border.color] */
@@ -78,7 +79,7 @@ extern struct wm {
     /* [[wm.monitor]] monitor layout specifications */
     LIST(struct wm_monitor {
         /* name of the monitor per Xrandr */
-        char *name;
+        utf8_t *name;
         /* layout to use for this monitor */
         enum tiling_layout layout;
     }, monitor);
@@ -86,11 +87,11 @@ extern struct wm {
     /* [[wm.workspace]] definition of specific workspaces */
     LIST(struct wm_workspace {
         /* string name of this workspace */
-        char *name;
+        utf8_t *name;
         /* unique number identifier */
-        unsigned number;
+        workspace_t number;
         /* the monitor this workspace is supposed to be on */
-        char *monitor;
+        utf8_t *monitor;
         /* layout to use for this workspace */
         enum tiling_layout layout;
     }, workspace);
@@ -98,16 +99,16 @@ extern struct wm {
     /* [[wm.window]] */
     LIST(struct wm_window {
         /* the name pattern to match against */
-        char *name;
+        utf8_t *name;
         /* the class pattern to match against */
-        char *class;
+        utf8_t *class;
         /* the instance pattern to match against */
-        char *instance;
+        utf8_t *instance;
 
         /* the workspace to appear on */
-        char *workspace;
+        utf8_t *workspace;
         /* the monitor to appear on */
-        char *monitor;
+        utf8_t *monitor;
         /* whether the window starts off hidden */
         bool hidden;
         /* user chosen mode to overwrite the default mode */
