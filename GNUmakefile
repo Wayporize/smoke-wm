@@ -2,21 +2,21 @@
 CC := cc
 
 # Packages
-override PACKAGES += xcb xcb-errors xcb-xkb xcb-icccm xcb-randr xkbcommon xkbcommon-x11
+override PACKAGES += xcb xcb-errors xcb-xkb xcb-randr xcb-icccm xcb-ewmh xkbcommon xkbcommon-x11
 
 # Compiler flags
-override C_FLAGS += -std=c99 -D_XOPEN_SOURCE=700 -Iinclude \
+override CFLAGS += -std=c99 -D_XOPEN_SOURCE=700 -Iinclude \
            -Wall -Wextra -Wpedantic -Wno-format-zero-length \
            $(shell pkg-config --cflags $(PACKAGES))
 # Add debug flags
 DEBUG_FLAGS := -DDEBUG -g -fsanitize=address
-override C_FLAGS += $(DEBUG_FLAGS)
+override CFLAGS += $(DEBUG_FLAGS)
 
 # Prefix of the build directory
 BUILD_PREFIX := build
 
 # Libraries
-C_LIBRARIES := $(shell pkg-config --libs $(PACKAGES))
+LDLIBS := $(shell pkg-config --libs $(PACKAGES))
 
 # Sandbox parameters
 SANDBOX_DISPLAY := :8
@@ -40,18 +40,18 @@ default: build
 # Build each object from corresponding source file
 $(BUILD_PREFIX)/%.o: %.c
 	mkdir -p $(dir $@)
-	$(CC) $(C_FLAGS) -c $< -o $@ -MMD
+	$(CC) $(CFLAGS) -c $< -o $@ -MMD
 
 # Build the main executable from all object files
 $(BUILD_PREFIX)/smoke-wm: $(OBJECTS)
 	mkdir -p $(dir $@)
-	$(CC) $(C_FLAGS) $(OBJECTS) -o $@ $(C_LIBRARIES)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDLIBS)
 
 # Functions
 .PHONY: analyze build sandbox clean
 
 analyze:
-	gcc -fanalyzer $(C_FLAGS) $(SOURCES) $(C_LIBRARIES)
+	gcc -fanalyzer $(CFLAGS) $(SOURCES) $(LDLIBS)
 
 build: $(BUILD_PREFIX)/smoke-wm
 
@@ -69,5 +69,6 @@ gdb-sandbox: build
 	DISPLAY=$(SANDBOX_DISPLAY) gdb -ex run --args ./$(BUILD_PREFIX)/smoke-wm
 	pkill Xephyr
 
+# Only ever remove `build/` not `$(BUILD_PREFIX)` for safety
 clean:
-	rm -rf $(BUILD_PREFIX)/
+	rm -rf build/

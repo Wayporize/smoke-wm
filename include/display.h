@@ -2,6 +2,7 @@
 #define X11_H
 
 #include <xcb/xcb.h>
+#include <xcb/xcb_ewmh.h>
 #include <xkbcommon/xkbcommon.h>
 
 struct display {
@@ -12,6 +13,8 @@ struct display {
     unsigned screen_index;
     /* root window on the active screen */
     xcb_window_t root;
+    /* ewmh library access */
+    xcb_ewmh_connection_t *ewmh;
 
     /* the currently focused window, focus changes while a window is grabbed */
     xcb_window_t focus;

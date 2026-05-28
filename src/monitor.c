@@ -206,7 +206,7 @@ xcb_randr_crtc_t get_monitor_from_rectangle(const struct rectangle *rectangle)
             return monitors[i].id;
         }
 
-        /* check if the overlapping is bigger than before */
+        /* check if the overlapping area is bigger than before */
         const int64_t area = get_overlapping_area(rectangle, &monitor_rectangle);
         if (area > best_area) {
             best_area = area;

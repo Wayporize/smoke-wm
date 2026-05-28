@@ -11,7 +11,6 @@ int main(int argc, char **argv)
     bool self_test;
     Display *display;
     Window window, child_window = None;
-    XSetWindowAttributes attributes;
     Atom wm_protocols_atom;
     Atom wm_take_focus_atom;
     Atom protocols[1];

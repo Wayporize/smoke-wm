@@ -180,6 +180,8 @@ void open_display(void)
     const xcb_setup_t *setup;
     xcb_screen_iterator_t iterator;
 
+    xcb_intern_atom_cookie_t *ewmh_cookies;
+
     xcb_randr_get_screen_resources_cookie_t randr_cookie;
 
     xcb_xkb_use_extension_cookie_t xkb_cookie;
@@ -216,6 +218,8 @@ void open_display(void)
         }
     }
 
+    ALLOCATE_ZERO(display.ewmh, 1);
+
     /* prefetch extensions */
     xcb_prefetch_extension_data(display.xcb, &xcb_randr_id);
     xcb_prefetch_extension_data(display.xcb, &xcb_xkb_id);
@@ -229,6 +233,7 @@ void open_display(void)
         intern_atoms[i].cookie = xcb_intern_atom(display.xcb, false,
             strlen(intern_atoms[i].name), intern_atoms[i].name);
     }
+    ewmh_cookies = xcb_ewmh_init_atoms(display.xcb, display.ewmh);
 
     randr_cookie = xcb_randr_get_screen_resources(display.xcb, display.root);
 
@@ -255,6 +260,7 @@ void open_display(void)
         *(intern_atoms[i].target) = atom_reply->atom;
         free(atom_reply);
     }
+    ASSERT(xcb_ewmh_init_atoms_replies(display.ewmh, ewmh_cookies, NULL), "could not initialize ewmh atoms");
 
     initialize_randr(randr_cookie);
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
@@ -720,6 +726,40 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
     }
 }
 
+/* Handle an incoming client message. */
+void handle_client_message(xcb_client_message_event_t *event)
+{
+    if (event->format == 32 && event->type == display.ewmh->_NET_MOVERESIZE_WINDOW) {
+        uint16_t mask = 0;
+        uint32_t values[4];
+        uint32_t index = 0;
+
+        const uint32_t flags = event->data.data32[0];
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_X)) {
+            mask |= XCB_CONFIG_WINDOW_X;
+            values[index] = event->data.data32[1];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_Y)) {
+            mask |= XCB_CONFIG_WINDOW_Y;
+            values[index] = event->data.data32[2];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_WIDTH)) {
+            mask |= XCB_CONFIG_WINDOW_WIDTH;
+            values[index] = event->data.data32[3];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_HEIGHT)) {
+            mask |= XCB_CONFIG_WINDOW_HEIGHT;
+            values[index] = event->data.data32[4];
+            index++;
+        }
+        /* TODO: consider gravity */
+        xcb_configure_window(display.xcb, event->window, mask, values);
+    }
+}
+
 /* Handle incoming events on the X11 connection. */
 void handle_server_events(void)
 {
@@ -751,6 +791,10 @@ void handle_server_events(void)
 
             case XCB_CONFIGURE_REQUEST: /* a window wants to be configured */
                 handle_configure_request((xcb_configure_request_event_t*) event);
+                break;
+
+            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+                configure_window((xcb_configure_notify_event_t*) event);
                 break;
 
             case XCB_MAP_REQUEST: /* a window wants to be shown on screen */
@@ -803,9 +847,16 @@ void handle_server_events(void)
                 destroy_window((xcb_destroy_notify_event_t*) event);
                 break;
 
+            /* most or all client message are sent through `xcb_send_event()`,
+             * it means that a client wants to tell us something
+             */
+            case (0x80 | XCB_CLIENT_MESSAGE):
+            case XCB_CLIENT_MESSAGE:
+                handle_client_message((xcb_client_message_event_t*) event);
+                break;
+
             case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_UNMAP_NOTIFY: /* a window was hidden */
-            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
                 /* TODO: react to these two by setting the window state,
                  * also react to the synthetic event which carries extra meaning
                  */

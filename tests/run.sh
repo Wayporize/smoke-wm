@@ -15,12 +15,15 @@ export SMOKE_WM="./build/smoke-wm"
 export SMOKE_WM_FAKE_RANDR="./build/fake-randr/smoke-wm"
 export OVERRIDE_REDIRECT="./build/tests/windows/override_redirect"
 export WM_TAKE_FOCUS="./build/tests/windows/wm_take_focus"
+export TOOL="./build/tests/tool"
 
 # Speed up compiling by making all at once
 make "$SMOKE_WM" &
-make "C_FLAGS=-DFAKE_RANDR" "SOURCES=tests/fake-randr.c" "BUILD_PREFIX=$(dirname $SMOKE_WM_FAKE_RANDR)" "$SMOKE_WM_FAKE_RANDR" &
-make -f tests/windows/GNUmakefile &
-wait
+make "CFLAGS=-Itests/fake-randr" "SOURCES=tests/fake-randr/randr.c" "BUILD_PREFIX=$(dirname $SMOKE_WM_FAKE_RANDR)" "$SMOKE_WM_FAKE_RANDR" &
+make -f tests/GNUmakefile &
+for p in $(jobs -p) ; do
+    wait "$p"
+done
 
 # Install exit handler
 xephyr_pid=""

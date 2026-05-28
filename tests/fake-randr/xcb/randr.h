@@ -1,7 +1,7 @@
 #ifndef TESTS__FAKE_RANDR_H
 #define TESTS__FAKE_RANDR_H
 
-#include <xcb/randr.h>
+#include </usr/include/xcb/randr.h>
 
 /* Return an empty cookie. */
 xcb_randr_get_screen_resources_cookie_t fake_get_screen_resources(void);

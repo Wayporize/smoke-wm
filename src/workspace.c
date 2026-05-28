@@ -2,6 +2,7 @@
 #include <utility/log.h>
 #include <utility/utility.h>
 
+#include "configuration.h"
 #include "display.h"
 #include "workspace.h"
 
@@ -28,6 +29,8 @@ static struct workspace *get_workspace(workspace_t id)
 static struct workspace *add_workspace(workspace_t id)
 {
     size_t index;
+    LIST(utf8_t, strings);
+    utf8_t *string;
 
     /* TODO: binary search */
     /* find the index the workspace fits into */
@@ -47,6 +50,32 @@ static struct workspace *add_workspace(workspace_t id)
     workspaces[index].id = id;
 
     notef("workspace %" PRIu32 " added\n", id);
+
+    LIST_INITIALIZE(strings, 32);
+    for (size_t i = 0; i < workspaces_length; i++) {
+        utf8_t *name;
+
+        for (size_t j = 0; j < Configuration.workspace_length; j++) {
+            if (Configuration.workspace[j].number == workspaces[i].id) {
+                name = Configuration.workspace[j].name;
+                break;
+            }
+        }
+        if (name == NULL) {
+            string = xasprintf("%" PRIu32, workspaces[i].id);
+            LIST_APPEND(strings, string, strlen(string) + 1);
+            free(string);
+        } else {
+            LIST_APPEND(strings, name, strlen(name) + 1);
+        }
+    }
+
+    xcb_ewmh_coordinates_t zero_coordinates[workspaces_length];
+    memset(zero_coordinates, 0, sizeof(zero_coordinates));
+    xcb_ewmh_set_desktop_viewport(display.ewmh, display.screen_index, workspaces_length, zero_coordinates);
+    xcb_ewmh_set_desktop_names(display.ewmh, display.screen_index, workspaces_length, strings);
+    free(strings);
+    xcb_ewmh_set_number_of_desktops(display.ewmh, display.screen_index, workspaces_length);
 
     return &workspaces[index];
 }
@@ -137,6 +166,9 @@ void focus_workspace(workspace_t id)
     workspace->state = WORKSPACE_ACTIVE;
 
     notef("workspace %" PRIu32 " focused\n", id);
+
+    const size_t index = workspace - workspaces;
+    xcb_ewmh_set_current_desktop(display.ewmh, display.screen_index, index);
 }
 
 /* Notify the workspace module that a new monitor now exists. */
@@ -162,9 +194,11 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
         /* if this is the first workspace to exist, make it active */
         if (workspaces_length == 1) {
             workspace->state = WORKSPACE_ACTIVE;
+            xcb_ewmh_set_current_desktop(display.ewmh, display.screen_index, 0);
         } else {
             workspace->state = WORKSPACE_VISIBLE;
         }
+        workspace->crtc = crtc;
     } else {
         /* find all workspaces with that crtc */
         for (size_t i = 0; i < workspaces_length; i++) {
@@ -180,6 +214,49 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
                 }
             }
         }
+    }
+}
+
+/* Get the workspace @window is part of. */
+static struct workspace *get_window_workspace(xcb_window_t window)
+{
+    for (size_t i = 0; i < workspaces_length; i++) {
+        for (size_t j = 0; j < workspaces[i].windows_length; j++) {
+            if (workspaces[i].windows[j] == window) {
+                return &workspaces[i];
+            }
+        }
+    }
+    return NULL;
+}
+
+/* Notify the workspace module that a window has moved. */
+void report_window_movement_to_workspaces(xcb_window_t window, const struct rectangle *rectangle)
+{
+    xcb_randr_crtc_t monitor;
+    struct workspace *window_workspace, *monitor_workspace = NULL;
+
+    monitor = get_monitor_from_rectangle(rectangle);
+    if (monitor == XCB_NONE) {
+        return;
+    }
+
+    window_workspace = get_window_workspace(window);
+    if (window_workspace == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < workspaces_length; i++) {
+        if (workspaces[i].crtc == monitor) {
+            monitor_workspace = &workspaces[i];
+            break;
+        }
+    }
+    ASSERT(monitor_workspace != NULL, "each monitor must have a workspace");
+
+    if (window_workspace != monitor_workspace) {
+        remove_window_from_workspace(window);
+        add_window_to_workspace(monitor_workspace->id, window);
     }
 }
 

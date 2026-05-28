@@ -4,11 +4,7 @@
 #include <utility/attributes.h>
 #include <utility/types.h>
 
-#ifdef FAKE_RANDR
-# include "../tests/fake-randr.h"
-#else
-# include <xcb/randr.h>
-#endif
+#include <xcb/randr.h>
 
 /* Screen/Monitor management using the XRandr extension (not Xinerama because
  * it is old and dumb).

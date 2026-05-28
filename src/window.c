@@ -280,6 +280,26 @@ static int focus_next_available_window(void)
     return 1;
 }
 
+/* Configure the size of a window. */
+void configure_window(xcb_configure_notify_event_t *event)
+{
+    struct window_cache *window;
+
+    window = get_window_by_id(event->window);
+    if (event->x != window->x || event->y != window->y ||
+            event->width != window->width || event->height != window->height) {
+        window->x = event->x;
+        window->y = event->y;
+        window->width = event->width;
+        window->height = event->height;
+        notef("window position and size of %" PRIu32 " changed\n", window->id);
+        const struct rectangle rectangle = {
+            window->x, window->y, window->width, window->height
+        };
+        report_window_movement_to_workspaces(window->id, &rectangle);
+    }
+}
+
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event)
 {

@@ -51,8 +51,14 @@ bool add_window_to_workspace(workspace_t workspace, xcb_window_t window);
 /* Remove the window from its current workspace. */
 void remove_window_from_workspace(xcb_window_t window);
 
-/* Focus the workspace identified by id @workspace. */
+/* Focus the workspace identified by id @workspace.
+ *
+ * At least one workspace MUST exist already.
+ */
 void focus_workspace(workspace_t workspace);
+
+/* Notify the workspace module that a window has moved. */
+void report_window_movement_to_workspaces(xcb_window_t window, const struct rectangle *rectangle);
 
 /* Notify the workspace module that a monitor has changed.
  *
