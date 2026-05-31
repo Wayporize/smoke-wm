@@ -41,7 +41,7 @@ extern struct wm {
         struct wm_tiling_gaps {
             /* gaps between tiled windows */
             int32_t inner[4];
-            /* gaps between tiled windows and the monitor edges */
+            /* gaps between tiled windows and the output edges */
             int32_t outer[4];
         } gaps;
     } tiling;
@@ -76,13 +76,13 @@ extern struct wm {
         } color;
     } border;
 
-    /* [[wm.monitor]] monitor layout specifications */
-    LIST(struct wm_monitor {
-        /* name of the monitor per Xrandr */
+    /* [[wm.output]] output layout specifications */
+    LIST(struct wm_output {
+        /* name of the output specified by RandR */
         utf8_t *name;
-        /* layout to use for this monitor */
+        /* layout to use for this output */
         enum tiling_layout layout;
-    }, monitor);
+    }, output);
 
     /* [[wm.workspace]] definition of specific workspaces */
     LIST(struct wm_workspace {
@@ -90,8 +90,8 @@ extern struct wm {
         utf8_t *name;
         /* unique number identifier */
         workspace_t number;
-        /* the monitor this workspace is supposed to be on */
-        utf8_t *monitor;
+        /* the output this workspace is supposed to be on */
+        utf8_t *output;
         /* layout to use for this workspace */
         enum tiling_layout layout;
     }, workspace);
@@ -107,8 +107,8 @@ extern struct wm {
 
         /* the workspace to appear on */
         utf8_t *workspace;
-        /* the monitor to appear on */
-        utf8_t *monitor;
+        /* the output to appear on */
+        utf8_t *output;
         /* whether the window starts off hidden */
         bool hidden;
         /* user chosen mode to overwrite the default mode */

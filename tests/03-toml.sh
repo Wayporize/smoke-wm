@@ -26,7 +26,7 @@ run_config_test() {
         elif [ "$line" = "$2" ] ; then
             return 0
         fi
-    done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM" 2>/dev/null)
+    done < <(XDG_CONFIG_HOME="$temp" "$SMOKE_WM")
     return 1
 }
 

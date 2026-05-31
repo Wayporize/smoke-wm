@@ -51,9 +51,9 @@ static void read_escape_character(struct toml_parse_context *context)
         if (isdigit(digit)) {
             unicode += digit - '0';
         } else if (isupper(digit)) {
-            unicode += digit - 'A';
+            unicode += 10 + digit - 'A';
         } else {
-            unicode += digit - 'a';
+            unicode += 10 + digit - 'a';
         }
     }
 
@@ -250,9 +250,9 @@ static long read_integer_base_x(struct toml_parse_context *context,
             if (isdigit(character)) {
                 number += character - '0';
             } else if (isupper(character)) {
-                number += character - 'A';
+                number += 10 + character - 'A';
             } else {
-                number += character - 'a';
+                number += 10 + character - 'a';
             }
         }
     } else if (character == 'o') {

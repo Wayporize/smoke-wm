@@ -98,17 +98,17 @@ void dump_configuration(struct wm *wm)
 
     print_border(&wm->border);
 
-    for (size_t i = 0; i < wm->monitor_length; i++) {
-        printf("[[MONITOR]]\n");
-        printf("name = %s\n", wm->monitor[i].name);
-        print_layout(wm->monitor[i].layout);
+    for (size_t i = 0; i < wm->output_length; i++) {
+        printf("[[OUTPUT]]\n");
+        printf("name = %s\n", wm->output[i].name);
+        print_layout(wm->output[i].layout);
     }
 
     for (size_t i = 0; i < wm->workspace_length; i++) {
         printf("[[WORKSPACE]]\n");
         printf("name = %s\n", wm->workspace[i].name);
         printf("number = %u\n", wm->workspace[i].number);
-        printf("monitor = %s\n", wm->workspace[i].monitor);
+        printf("output = %s\n", wm->workspace[i].output);
         print_layout(wm->workspace[i].layout);
     }
 
@@ -118,7 +118,7 @@ void dump_configuration(struct wm *wm)
         printf("class = %s\n", wm->window[i].class);
         printf("instance = %s\n", wm->window[i].instance);
         printf("workspace = %s\n", wm->window[i].workspace);
-        printf("monitor = %s\n", wm->window[i].monitor);
+        printf("output = %s\n", wm->window[i].output);
         printf("hidden = %d\n", wm->window[i].hidden);
         printf("mode = ");
         switch (wm->window[i].mode) {
@@ -151,14 +151,14 @@ void dump_configuration(struct wm *wm)
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm)
 {
-    for (size_t i = 0; i < wm->monitor_length; i++) {
-        free(wm->monitor[i].name);
+    for (size_t i = 0; i < wm->output_length; i++) {
+        free(wm->output[i].name);
     }
-    free(wm->monitor);
+    free(wm->output);
 
     for (size_t i = 0; i < wm->workspace_length; i++) {
         free(wm->workspace[i].name);
-        free(wm->workspace[i].monitor);
+        free(wm->workspace[i].output);
     }
     free(wm->workspace);
 
@@ -167,7 +167,7 @@ void clear_configuration(struct wm *wm)
         free(wm->window[i].class);
         free(wm->window[i].instance);
         free(wm->window[i].workspace);
-        free(wm->window[i].monitor);
+        free(wm->window[i].output);
     }
     free(wm->window);
 

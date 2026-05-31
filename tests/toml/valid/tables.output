@@ -31,10 +31,10 @@ border.color.tiling.red = 0xffff
 border.color.tiling.green = 0x0000
 border.color.tiling.blue = 0x0000
 border.color.tiling.alpha = 0xffff
-[[MONITOR]]
+[[OUTPUT]]
 name = (null)
 layout = unspecified
-[[MONITOR]]
+[[OUTPUT]]
 name = (null)
 layout = unspecified
 [[WINDOW]]
@@ -42,7 +42,7 @@ name = (null)
 class = (null)
 instance = (null)
 workspace = (null)
-monitor = (null)
+output = (null)
 hidden = 0
 mode = unspecified
 border.size = 2
