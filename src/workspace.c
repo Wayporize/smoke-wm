@@ -53,14 +53,16 @@ static struct workspace *add_workspace(workspace_t id)
 
     LIST_INITIALIZE(strings, 32);
     for (size_t i = 0; i < workspaces_length; i++) {
-        utf8_t *name;
+        utf8_t *name = NULL;
 
+        /* try to find a configured name for this workspace */
         for (size_t j = 0; j < Configuration.workspace_length; j++) {
             if (Configuration.workspace[j].number == workspaces[i].id) {
                 name = Configuration.workspace[j].name;
                 break;
             }
         }
+        /* if there is no name configured, us the number as name */
         if (name == NULL) {
             string = xasprintf("%" PRIu32, workspaces[i].id);
             LIST_APPEND(strings, string, strlen(string) + 1);
@@ -73,8 +75,10 @@ static struct workspace *add_workspace(workspace_t id)
     xcb_ewmh_coordinates_t zero_coordinates[workspaces_length];
     memset(zero_coordinates, 0, sizeof(zero_coordinates));
     xcb_ewmh_set_desktop_viewport(display.ewmh, display.screen_index, workspaces_length, zero_coordinates);
-    xcb_ewmh_set_desktop_names(display.ewmh, display.screen_index, workspaces_length, strings);
+
+    xcb_ewmh_set_desktop_names(display.ewmh, display.screen_index, strings_length, strings);
     free(strings);
+
     xcb_ewmh_set_number_of_desktops(display.ewmh, display.screen_index, workspaces_length);
 
     return &workspaces[index];
