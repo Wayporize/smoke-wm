@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 
     /* get the user id and refuse to run as root */
     user_id = getuid();
-    ASSERT(user_id != 0, "smoke-wm is not allowed to be run as root user\n");
+    ASSERT(user_id != 0, "smoke-wm is not allowed to be run as root user");
 
     /* get the home directory through HOME or fall back to the passwd entry */
     home = getenv("HOME");
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 
     /* try to become the active window manager */
     status = take_wm_ownership();
-    ASSERT(status == WM_OWNERSHIP_SUCCESS, "could not become the window manager\n");
+    ASSERT(status == WM_OWNERSHIP_SUCCESS, "could not become the window manager");
 
     /* receive all events by the server and handle them */
     handle_server_events();

@@ -27,7 +27,7 @@ static void initialize_randr(xcb_randr_get_screen_resources_cookie_t cookie)
 
     extension_reply = xcb_get_extension_data(display.xcb, &xcb_randr_id);
     ASSERT(extension_reply != NULL,
-            "failed to query xcb extension data for RandR\n");
+            "failed to query xcb extension data for RandR");
     ASSERT(extension_reply->present, "the server does not support RandR");
 
     display.randr_base_event = extension_reply->first_event;
@@ -52,12 +52,12 @@ static void refresh_keyboard_mapping(void)
 
     display.keymap = xkb_x11_keymap_new_from_device(display.xkb, display.xcb,
             display.keyboard_device_id, 0);
-    ASSERT(display.keymap != NULL, "could not create xkb keymap\n");
+    ASSERT(display.keymap != NULL, "could not create xkb keymap");
 
     display.keyboard_state = xkb_x11_state_new_from_device(display.keymap,
             display.xcb, display.keyboard_device_id);
     ASSERT(display.keyboard_state != NULL,
-            "could not create xkb keyboard state\n");
+            "could not create xkb keyboard state");
 }
 
 /* Initialize the Xkb extension and xkbcommon library. */
@@ -91,27 +91,27 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
 
     extension_reply = xcb_get_extension_data(display.xcb, &xcb_xkb_id);
     ASSERT(extension_reply != NULL,
-            "failed to query xcb extension data for xkb\n");
+            "failed to query xcb extension data for xkb");
     ASSERT(extension_reply->present,
-            "xkb is not available on the server\n");
+            "xkb is not available on the server");
 
     display.xkb_base_event = extension_reply->first_event;
     display.xkb_base_error = extension_reply->first_error;
 
     reply = xcb_xkb_use_extension_reply(display.xcb, cookie, &error);
-    ASSERT(reply != NULL, "using xcb extension xkb failed: error code %d\n",
+    ASSERT(reply != NULL, "using xcb extension xkb failed: error code %d",
             error->error_code);
-    ASSERT(reply->supported, "server does not support xkb version %d.%d\n",
+    ASSERT(reply->supported, "server does not support xkb version %d.%d",
                 XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
     free(reply);
 
     display.xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    ASSERT(display.xkb != NULL, "could not create xkb context\n");
+    ASSERT(display.xkb != NULL, "could not create xkb context");
 
     /* get the device id of the core keyboard */
     device_reply = xcb_xkb_get_device_info_reply(display.xcb, device_cookie,
             NULL);
-    ASSERT(device_reply != NULL, "could not get xkb device info\n");
+    ASSERT(device_reply != NULL, "could not get xkb device info");
     display.keyboard_device_id = device_reply->deviceID;
     free(device_reply);
 
@@ -140,9 +140,9 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
 
     client_reply = xcb_xkb_per_client_flags_reply(display.xcb, client_cookie,
             &error);
-    ASSERT(client_reply != NULL, "could not set xkb per client flags\n");
+    ASSERT(client_reply != NULL, "could not set xkb per client flags");
     ASSERT((client_reply->value & XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT),
-            "could not set per client flags (X server can not comply)\n");
+            "could not set per client flags (X server can not comply)");
     free(client_reply);
 
     /* do an initial refresh */
@@ -204,7 +204,7 @@ void open_display(void)
     /* connect to the X server */
     display.xcb = xcb_connect(NULL, &screen_index);
     connection_error = xcb_connection_has_error(display.xcb);
-    ASSERT(connection_error == 0, "%s\n",
+    ASSERT(connection_error == 0, "%s",
             get_connection_error_string(connection_error));
 
     display.screen_index = screen_index;
@@ -256,7 +256,7 @@ void open_display(void)
         xcb_intern_atom_reply_t *atom_reply;
 
         atom_reply = xcb_intern_atom_reply(display.xcb, intern_atoms[i].cookie, NULL);
-        ASSERT(atom_reply != NULL, "could not intern %s atom\n", intern_atoms[i].name);
+        ASSERT(atom_reply != NULL, "could not intern %s atom", intern_atoms[i].name);
         *(intern_atoms[i].target) = atom_reply->atom;
         free(atom_reply);
     }
@@ -389,7 +389,7 @@ static int handle_extension_event(xcb_generic_event_t *event)
     }
 
     error = xcb_connection_has_error(display.xcb);
-    ASSERT(error == 0, "xcb connection error: %s\n",
+    ASSERT(error == 0, "xcb connection error: %s",
             get_connection_error_string(error));
 
     return status;
@@ -442,7 +442,7 @@ static xcb_window_t get_selection_owner(xcb_atom_t atom)
     owner_cookie = xcb_get_selection_owner(display.xcb, atom);
     owner_reply = xcb_get_selection_owner_reply(display.xcb, owner_cookie,
             NULL);
-    ASSERT(owner_reply != NULL, "could not get selection owner\n");
+    ASSERT(owner_reply != NULL, "could not get selection owner");
 
     owner = owner_reply->owner;
     free(owner_reply);
@@ -611,7 +611,7 @@ enum wm_ownership_status take_wm_ownership(void)
         if (error != NULL) {
             /* if this is not an access error, our connection must be broken */
             ASSERT(error->error_code == XCB_ACCESS,
-                    "Could not change window attributes on the root window\n");
+                    "Could not change window attributes on the root window");
             free(error);
 
             owner = get_selection_owner(display.wm_sn_atom);
