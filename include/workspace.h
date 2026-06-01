@@ -36,20 +36,17 @@ struct workspace {
     /* the state the workspace is in */
     enum workspace_state state;
     /* a list of windows associated to this workspace */
-    LIST(xcb_window_t, windows);
+    LIST(struct window*, windows);
 };
 
 /* Add a new window to a workspace.
  *
- * @workspace is the workspace to show the window on.
  * @window is the newly managed window.
- *
- * @return if the workspace the window is added to is visible.
  */
-bool add_window_to_workspace(workspace_t workspace, xcb_window_t window);
+void add_window_to_workspace(struct window *window);
 
 /* Remove the window from its current workspace. */
-void remove_window_from_workspace(xcb_window_t window);
+void remove_window_from_workspace(struct window *window);
 
 /* Focus the workspace identified by id @workspace.
  *
@@ -57,8 +54,11 @@ void remove_window_from_workspace(xcb_window_t window);
  */
 void focus_workspace(workspace_t workspace);
 
+/* Notify the workspace module that the window got a map request. */
+void relay_map_request_to_workspaces(struct window *window);
+
 /* Notify the workspace module that a window has moved. */
-void report_window_movement_to_workspaces(xcb_window_t window, const struct rectangle *rectangle);
+void report_window_movement_to_workspaces(struct window *window);
 
 /* Notify the workspace module that a monitor has changed.
  *
@@ -69,6 +69,6 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
         const struct rectangle *old_rectangle, const struct rectangle *new_rectangle);
 
 /* Notify the workspace module that the focus has changed. */
-void report_focus_change_to_workspaces(xcb_window_t window);
+void report_focus_change_to_workspaces(struct window *window);
 
 #endif

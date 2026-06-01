@@ -30,6 +30,15 @@ enum border_decoration {
     BORDER_FULL
 };
 
+struct wm_color {
+    /* if this actually has a value */
+    bool is_set;
+    /* color transparency, TODO: relevance? */
+    uint16_t alpha;
+    /* red, green and blue components */
+    uint16_t red, green, blue;
+};
+
 /* the globally accessible configuration object */
 extern struct wm {
     /* [wm.tiling] */
@@ -66,13 +75,13 @@ extern struct wm {
             /* for each color, alpha == 0 indicates that this value is not set
              */
             /* the color of the border when the window is focused */
-            xcb_render_color_t focused;
+            struct wm_color focused;
             /* the secondary focused color of the border */
-            xcb_render_color_t highlight;
+            struct wm_color highlight;
             /* the color for in active windows (not focused, not highlighted) */
-            xcb_render_color_t inactive;
+            struct wm_color inactive;
             /* focused colors for floating and tiling windows */
-            xcb_render_color_t floating, tiling;
+            struct wm_color floating, tiling;
         } color;
     } border;
 
@@ -109,8 +118,10 @@ extern struct wm {
         utf8_t *workspace;
         /* the output to appear on */
         utf8_t *output;
-        /* whether the window starts off hidden */
-        bool hidden;
+        /* whether the window starts off hidden
+         * (-1 for "unset", 0/1 for false/true)
+         */
+        int hidden;
         /* user chosen mode to overwrite the default mode */
         enum window_mode mode;
         /* specific border for this window */
@@ -163,5 +174,13 @@ void set_configuration_bindings(struct wm *wm);
  * @return NULL if there is no configuration file.
  */
 char *get_configuration_path(void);
+
+/* Get the configuration entry associated to given window.
+ *
+ * @configuration will hold the window configuration.
+ *
+ * @return whether the window has any configuration.
+ */
+bool get_window_configuration(const struct window *window, struct wm_window *configuration);
 
 #endif

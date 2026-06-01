@@ -45,7 +45,7 @@ void get_monitor_rectangle(xcb_randr_crtc_t crtc, struct rectangle *rectangle);
  * If the mid point of the rectangle is contained in any monitor, this will have
  * priority over the interection area.
  */
-xcb_randr_crtc_t get_monitor_from_rectangle(const struct rectangle *rectangle);
+xcb_randr_crtc_t get_monitor_from_rectangle(int32_t x, int32_t y, int32_t width, int32_t height);
 
 /* Cache output properties. */
 void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc,

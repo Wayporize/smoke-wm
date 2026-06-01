@@ -9,11 +9,13 @@
 #define XCB_ICCCM_WM_STATE_NEW ((xcb_icccm_wm_state_t) 4)
 
 /* cache for properties and geometry of an X11 window */
-struct window_cache {
+struct window {
     /* the X11 window id */
     xcb_window_t id;
     /* position and size of the window */
     int32_t x, y, width, height;
+    /* the current window state */
+    xcb_icccm_wm_state_t state;
     /* additional hints set by a client */
     xcb_icccm_wm_hints_t hints;
     /* size hints set by a client to properly size the window */
@@ -23,18 +25,18 @@ struct window_cache {
         /* if the `WM_TAKE_FOCUS` client message can be used */
         bool has_wm_take_focus;
     } protocols;
-    /* the current window state */
-    xcb_icccm_wm_state_t state;
+    /* window text properties */
+    utf8_t *name, *instance, *class;
 };
 
 /* TODO: Go through all windows that already exist and manage them. */
 void query_existing_windows(void);
 
+/* Get the internal representation of an X window. */
+struct window *get_internal_window(xcb_window_t window);
+
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event);
-
-/* Get the cached position and size of given X window. */
-void get_window_rectangle(xcb_window_t window, struct rectangle *rectangle);
 
 /* Change a property of a window.
  *

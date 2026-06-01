@@ -204,9 +204,8 @@ static void append_wm_window(struct toml_parse_context *context)
     LIST_APPEND(context->wm.window, NULL, 1);
     window = &context->wm.window[context->wm.window_length - 1];
     ZERO(window, 1);
-    /* set markers for "unset", they will be resolved after the parsing
-     * completed
-     */
+    /* set markers for "unset" */
+    window->hidden = -1;
     window->border.size = -1;
     window->border.radius.inner = -1;
     window->border.radius.outer = -1;
@@ -276,18 +275,26 @@ static void parse_border_radius(
 static void parse_border_color(struct toml_parse_context *context,
         struct wm_border *border)
 {
-    xcb_render_color_t *pointer;
+    struct wm_color *pointer;
+    XColor color;
 
-    switch (context->string[1]) {
-    case 'o': pointer = &border->color.focused; break;
-    case 'c': pointer = &border->color.highlight; break;
-    case 'n': pointer = &border->color.inactive; break;
-    case 'l': pointer = &border->color.floating; break;
-    case 'i': pointer = &border->color.tiling; break;
+    switch (context->string[2]) {
+    case 'c': pointer = &border->color.focused; break;
+    case 'g': pointer = &border->color.highlight; break;
+    case 'a': pointer = &border->color.inactive; break;
+    case 'o': pointer = &border->color.floating; break;
+    case 'l': pointer = &border->color.tiling; break;
         break;
     }
     read_any_string(context);
-    /* TODO: parse color */
+    if (!XParseColor(display.xlib, XDefaultColormap(display.xlib, XDefaultScreen(display.xlib)), context->string, &color)) {
+        emit_error(context, "could not parse color");
+    }
+    pointer->is_set = true;
+    pointer->alpha = 0xffff;
+    pointer->red = color.red;
+    pointer->green = color.green;
+    pointer->blue = color.blue;
 }
 
 static void parse_layout(struct toml_parse_context *context,
@@ -344,10 +351,10 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
 
     enum window_mode mode;
 
-    if (context->string[0] == '\0') {
+    if (string[0] == '\0') {
         mode = 0;
     } else {
-        switch (context->string[1]) {
+        switch (string[1]) {
         case 'n': mode = WINDOW_UNSPECIFIED; break;
         case 'i': mode = WINDOW_TILING; break;
         case 'l': mode = WINDOW_FLOATING; break;
@@ -356,7 +363,7 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
         }
     }
 
-    if (strcmp(modes[mode], context->string) != 0) {
+    if (strcmp(modes[mode], string) != 0) {
         emit_error(context, "invalid mode constant, choose one of: "
                 "tiling, floating, fullscreen");
     }

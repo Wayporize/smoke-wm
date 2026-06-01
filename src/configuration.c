@@ -39,7 +39,7 @@ struct wm Configuration_default = {
 
 /* Print the given color as four lines to stdout and prefix each with @prefix.
  */
-static void print_color(const char *prefix, xcb_render_color_t *color)
+static void print_color(const char *prefix, struct wm_color *color)
 {
     printf("%s.red = 0x%04x\n", prefix, color->red);
     printf("%s.green = 0x%04x\n", prefix, color->green);
@@ -284,4 +284,66 @@ char *get_configuration_path(void)
     free(path);
 
     return NULL;
+}
+
+/* Get the configuration entry associated to given window. */
+bool get_window_configuration(const struct window *window, struct wm_window *configuration)
+{
+    bool has_entry = false;
+
+    /* start with the base configuration */
+    ZERO(configuration, 1);
+    configuration->border = Configuration.border;
+
+    /* merge matching configuration entries into the current configuration */
+    for (size_t i = 0; i < Configuration.window_length; i++) {
+        struct wm_window *const entry = &Configuration.window[i];
+        if (matches_pattern(entry->name, window->name) &&
+                matches_pattern(entry->class, window->class) &&
+                matches_pattern(entry->instance, window->instance)) {
+            has_entry = true;
+            if (entry->workspace != NULL) {
+                configuration->workspace = entry->workspace;
+            }
+            if (entry->output != NULL) {
+                configuration->output = entry->output;
+            }
+            if (entry->hidden != -1) {
+                configuration->hidden = entry->hidden;
+            }
+            if (entry->mode != WINDOW_UNSPECIFIED) {
+                configuration->mode = entry->mode;
+            }
+
+            struct wm_border *const border = &entry->border;
+            if (border->size != -1) {
+                configuration->border.size = border->size;
+            }
+            if (border->decoration != BORDER_UNSPECIFIED) {
+                configuration->border.decoration = border->decoration;
+            }
+            if (border->radius.inner != -1) {
+                configuration->border.radius.inner = border->radius.inner;
+            }
+            if (border->radius.outer != -1) {
+                configuration->border.radius.outer = border->radius.outer;
+            }
+            if (border->color.focused.is_set) {
+                configuration->border.color.focused = border->color.focused;
+            }
+            if (border->color.highlight.is_set) {
+                configuration->border.color.highlight = border->color.highlight;
+            }
+            if (border->color.inactive.is_set) {
+                configuration->border.color.inactive = border->color.inactive;
+            }
+            if (border->color.tiling.is_set) {
+                configuration->border.color.tiling = border->color.tiling;
+            }
+            if (border->color.floating.is_set) {
+                configuration->border.color.floating = border->color.floating;
+            }
+        }
+    }
+    return has_entry;
 }

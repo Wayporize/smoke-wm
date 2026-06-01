@@ -96,25 +96,23 @@ static struct workspace *get_active_workspace(void)
 }
 
 /* Add a new window to a workspace. */
-bool add_window_to_workspace(workspace_t id, xcb_window_t window)
+void add_window_to_workspace(struct window *window)
 {
     struct workspace *workspace;
 
-    if (id == WORKSPACE_NONE) {
-        workspace = get_active_workspace();
-    } else {
-        workspace = get_workspace(id);
-    }
+    /* TODO: use configuration to get the preferred workspace */
+    workspace = get_active_workspace();
     LIST_APPEND_VALUE(workspace->windows, window);
     /* TODO: if tiling, reposition/resize existing windows */
+    if (window->state == XCB_ICCCM_WM_STATE_NORMAL && workspace->state == WORKSPACE_HIDDEN) {
+        window->state = XCB_ICCCM_WM_STATE_ICONIC;
+    }
 
-    notef("window %#" PRIx32 " added to workspace %" PRIu32 "\n", window, workspace->id);
-
-    return workspace->state >= WORKSPACE_VISIBLE;
+    notef("window %#" PRIx32 " added to workspace %" PRIu32 "\n", window->id, workspace->id);
 }
 
 /* Remove the window from its current workspace. */
-void remove_window_from_workspace(xcb_window_t window)
+void remove_window_from_workspace(struct window *window)
 {
     /* find any workspace this window is on and remove it */
     for (size_t i = 0; i < workspaces_length; i++) {
@@ -124,7 +122,7 @@ void remove_window_from_workspace(xcb_window_t window)
                 MOVE(&workspaces[i].windows[j], &workspaces[i].windows[j],
                         workspaces[i].windows_length - j);
                 /* TODO: if tiling, reposition/resize existing windows */
-                notef("window %#" PRIx32 " removed from workspace %" PRIu32 "\n", window, workspaces[i].id);
+                notef("window %#" PRIx32 " removed from workspace %" PRIu32 "\n", window->id, workspaces[i].id);
                 return;
             }
         }
@@ -153,7 +151,7 @@ void focus_workspace(workspace_t id)
     /* map new windows if the workspace was previously hidden */
     if (workspace->state == WORKSPACE_HIDDEN) {
         for (size_t i = 0; i < workspace->windows_length; i++) {
-            xcb_map_window(display.xcb, workspace->windows[i]);
+            xcb_map_window(display.xcb, workspace->windows[i]->id);
         }
     }
 
@@ -161,7 +159,7 @@ void focus_workspace(workspace_t id)
     if (old_workspace->crtc == workspace->crtc) {
         old_workspace->state = WORKSPACE_HIDDEN;
         for (size_t i = 0; i < old_workspace->windows_length; i++) {
-            xcb_unmap_window(display.xcb, old_workspace->windows[i]);
+            xcb_unmap_window(display.xcb, old_workspace->windows[i]->id);
         }
     } else {
         old_workspace->state = WORKSPACE_VISIBLE;
@@ -222,7 +220,7 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
 }
 
 /* Get the workspace @window is part of. */
-static struct workspace *get_window_workspace(xcb_window_t window)
+static struct workspace *get_window_workspace(struct window *window)
 {
     for (size_t i = 0; i < workspaces_length; i++) {
         for (size_t j = 0; j < workspaces[i].windows_length; j++) {
@@ -234,13 +232,24 @@ static struct workspace *get_window_workspace(xcb_window_t window)
     return NULL;
 }
 
+/* Notify the workspace module that the window got a map request. */
+void relay_map_request_to_workspaces(struct window *window)
+{
+    struct workspace *const workspace = get_window_workspace(window);
+    if (workspace != NULL &&
+            workspace->state == WORKSPACE_HIDDEN &&
+            window->state == XCB_ICCCM_WM_STATE_NORMAL) {
+        window->state = XCB_ICCCM_WM_STATE_ICONIC;
+    }
+}
+
 /* Notify the workspace module that a window has moved. */
-void report_window_movement_to_workspaces(xcb_window_t window, const struct rectangle *rectangle)
+void report_window_movement_to_workspaces(struct window *window)
 {
     xcb_randr_crtc_t monitor;
     struct workspace *window_workspace, *monitor_workspace = NULL;
 
-    monitor = get_monitor_from_rectangle(rectangle);
+    monitor = get_monitor_from_rectangle(window->x, window->y, window->width, window->height);
     if (monitor == XCB_NONE) {
         return;
     }
@@ -260,20 +269,16 @@ void report_window_movement_to_workspaces(xcb_window_t window, const struct rect
 
     if (window_workspace != monitor_workspace) {
         remove_window_from_workspace(window);
-        add_window_to_workspace(monitor_workspace->id, window);
+        LIST_APPEND_VALUE(monitor_workspace->windows, window);
+        notef("window %#" PRIx32 " switched to workspace %" PRIu32 "\n",
+                window->id, monitor_workspace->id);
     }
 }
 
 /* Notify the workspace module that the focus has changed. */
-void report_focus_change_to_workspaces(xcb_window_t window)
+void report_focus_change_to_workspaces(struct window *window)
 {
     xcb_randr_crtc_t monitor;
-    struct rectangle rectangle;
-
-    if (window == display.root) {
-        /* since the root stretches all workspaces, no change required */
-        return;
-    }
 
     /* find any workspace this window is on and focus that workspace */
     for (size_t i = 0; i < workspaces_length; i++) {
@@ -288,8 +293,7 @@ void report_focus_change_to_workspaces(xcb_window_t window)
     /* the window is not on any workspace, find the monitor it is on and from
      * there the workspace
      */
-    get_window_rectangle(window, &rectangle);
-    monitor = get_monitor_from_rectangle(&rectangle);
+    monitor = get_monitor_from_rectangle(window->x, window->y, window->width, window->height);
     for (size_t i = 0; i < workspaces_length; i++) {
         if (workspaces[i].crtc == monitor) {
             focus_workspace(workspaces[i].id);

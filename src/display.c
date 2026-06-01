@@ -199,10 +199,15 @@ void open_display(void)
 
         { .name = "WM_PROTOCOLS", .target = &display.wm_protocols },
         { .name = "WM_TAKE_FOCUS", .target = &display.wm_take_focus },
+
+        { .name = "WM_STATE", .target = &display.wm_state },
     };
 
     /* connect to the X server */
-    display.xcb = xcb_connect(NULL, &screen_index);
+    display.xlib = XOpenDisplay(NULL);
+    XSetEventQueueOwner(display.xlib, XCBOwnsEventQueue);
+    screen_index = XDefaultScreen(display.xlib);
+    display.xcb = XGetXCBConnection(display.xlib);
     connection_error = xcb_connection_has_error(display.xcb);
     ASSERT(connection_error == 0, "%s",
             get_connection_error_string(connection_error));
@@ -832,7 +837,10 @@ void handle_server_events(void)
                         /* the truest "focus changed from A to B" event */
                         notef("focus changed to %#" PRIx32 "\n", focus->event);
                         display.focus = focus->event;
-                        report_focus_change_to_workspaces(display.focus);
+                        struct window *const window = get_internal_window(focus->event);
+                        if (window != NULL) {
+                            report_focus_change_to_workspaces(window);
+                        }
                     } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
                         /* TODO: the root or None got focused, delegate the
@@ -855,11 +863,11 @@ void handle_server_events(void)
                 handle_client_message((xcb_client_message_event_t*) event);
                 break;
 
-            case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_UNMAP_NOTIFY: /* a window was hidden */
-                /* TODO: react to these two by setting the window state,
+                /* TODO: react to this by setting the window state,
                  * also react to the synthetic event which carries extra meaning
                  */
+            case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;

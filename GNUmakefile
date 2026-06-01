@@ -2,7 +2,7 @@
 CC := cc
 
 # Packages
-override PACKAGES += xcb xcb-errors xcb-xkb xcb-randr xcb-icccm xcb-ewmh xkbcommon xkbcommon-x11
+override PACKAGES += x11 x11-xcb xcb xcb-errors xcb-xkb xcb-randr xcb-icccm xcb-ewmh xkbcommon xkbcommon-x11
 
 # Compiler flags
 override CFLAGS += -std=c99 -D_XOPEN_SOURCE=700 -Iinclude \
