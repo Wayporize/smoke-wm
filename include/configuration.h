@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#include <xcb/xproto.h>
-#include <xcb/render.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include <utility/list.h>
@@ -72,8 +70,6 @@ extern struct wm {
 
         /* [wm.border.color] */
         struct wm_border_color {
-            /* for each color, alpha == 0 indicates that this value is not set
-             */
             /* the color of the border when the window is focused */
             struct wm_color focused;
             /* the secondary focused color of the border */
@@ -97,8 +93,6 @@ extern struct wm {
     LIST(struct wm_workspace {
         /* string name of this workspace */
         utf8_t *name;
-        /* unique number identifier */
-        workspace_t number;
         /* the output this workspace is supposed to be on */
         utf8_t *output;
         /* layout to use for this workspace */

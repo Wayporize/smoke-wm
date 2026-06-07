@@ -82,7 +82,7 @@ void emit_error(struct toml_parse_context *context, const char *format, ...)
     for (unsigned i = 0; i < column; i++) {
         putchar(' ');
     }
-    puts("        ^\n");
+    puts("        ^");
 
     longjmp(context->jump, 1);
 }

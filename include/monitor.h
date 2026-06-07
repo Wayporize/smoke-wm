@@ -37,6 +37,9 @@ struct monitor {
 /* Initialize the output and monitor list with the current RandR configuration. */
 void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie);
 
+/* Get the monitor that is projected onto the output with given name. */
+xcb_randr_crtc_t get_monitor_from_output_name(const utf8_t *name);
+
 /* Get the position and size of a monitor. */
 void get_monitor_rectangle(xcb_randr_crtc_t crtc, struct rectangle *rectangle);
 

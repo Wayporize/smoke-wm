@@ -8,15 +8,6 @@
 
 /* Workspace/desktop and tiling management. */
 
-/* a unique workspace ID */
-typedef uint32_t workspace_t;
-
-/* ID for a non existent workspace */
-#define WORKSPACE_NONE 0
-
-/* the first valid workspace ID */
-#define WORKSPACE_FIRST 1
-
 enum workspace_state {
     /* the workspace cannot be seen */
     WORKSPACE_HIDDEN,
@@ -29,8 +20,8 @@ enum workspace_state {
 };
 
 struct workspace {
-    /* unique identifier of the workspace */
-    workspace_t id;
+    /* name and unique identifier of this workspace */
+    utf8_t *name;
     /* the crtc this workspace is on */
     xcb_randr_crtc_t crtc;
     /* the state the workspace is in */
@@ -48,11 +39,11 @@ void add_window_to_workspace(struct window *window);
 /* Remove the window from its current workspace. */
 void remove_window_from_workspace(struct window *window);
 
-/* Focus the workspace identified by id @workspace.
+/* Focus the workspace identified by id @name.
  *
  * At least one workspace MUST exist already.
  */
-void focus_workspace(workspace_t workspace);
+void focus_workspace(const utf8_t *name);
 
 /* Notify the workspace module that the window got a map request. */
 void relay_map_request_to_workspaces(struct window *window);
@@ -70,5 +61,14 @@ void report_monitor_change_to_workspaces(xcb_randr_crtc_t crtc,
 
 /* Notify the workspace module that the focus has changed. */
 void report_focus_change_to_workspaces(struct window *window);
+
+struct wm;
+/* Notify the workspace module that the configuration has changed.
+ *
+ * @configuration is the difference in configuration, meaning only changed
+ *                values are set and list items that existed before do not
+ *                appear.
+ */
+void report_configuration_change_to_workspaces(struct wm *configuration);
 
 #endif

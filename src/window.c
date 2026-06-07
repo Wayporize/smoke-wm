@@ -204,7 +204,9 @@ void handle_map_request(xcb_map_request_event_t *event)
             window->state = XCB_ICCCM_WM_STATE_NORMAL;
         }
 
-        /* let the workspace change window state based on its own state */
+        /* let the workspace change window state based on its own state like it
+         * does in `add_window_to_workspace()`
+         */
         relay_map_request_to_workspaces(window);
     }
 

@@ -43,7 +43,6 @@ static void parse_wm_border_color(struct toml_parse_context *context);
 static void parse_wm_output_name(struct toml_parse_context *context);
 static void parse_wm_output_layout(struct toml_parse_context *context);
 static void parse_wm_workspace_name(struct toml_parse_context *context);
-static void parse_wm_workspace_number(struct toml_parse_context *context);
 static void parse_wm_workspace_output(struct toml_parse_context *context);
 static void parse_wm_workspace_layout(struct toml_parse_context *context);
 static void parse_wm_window_name(struct toml_parse_context *context);
@@ -108,7 +107,6 @@ static const struct {
             { 3, "layout", parse_wm_output_layout, NULL },
         { 2, "workspace", NULL, append_wm_workspace },
             { 3, "name", parse_wm_workspace_name, NULL },
-            { 3, "number", parse_wm_workspace_number, NULL },
             { 3, "output", parse_wm_workspace_output, NULL },
             { 3, "layout", parse_wm_workspace_layout, NULL },
         { 2, "window", NULL, append_wm_window },
@@ -630,19 +628,6 @@ static void parse_wm_workspace_name(struct toml_parse_context *context)
     free(context->wm.workspace[context->wm.workspace_length - 1].name);
     context->wm.workspace[context->wm.workspace_length - 1].name =
         xstrdup(context->string);
-}
-
-static void parse_wm_workspace_number(struct toml_parse_context *context)
-{
-    if (context->wm.workspace_length == 0) {
-        emit_error(context,
-                "can not modify 'workspace' if no entry was defined yet");
-    }
-
-    read_integer(context);
-    /* TODO: bounds check */
-    context->wm.workspace[context->wm.workspace_length - 1].number =
-        context->number;
 }
 
 static void parse_wm_workspace_output(struct toml_parse_context *context)

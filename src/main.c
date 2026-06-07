@@ -103,6 +103,7 @@ int main(int argc, char **argv)
             /* associated to test "toml" */
             notef("parsing configuration succeeded\n");
             set_configuration_bindings(&Configuration);
+            report_configuration_change_to_workspaces(&Configuration);
         } else {
             /* associated to test "toml" */
             notef("parsing configuration failed\n");

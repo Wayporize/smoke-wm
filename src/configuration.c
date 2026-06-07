@@ -107,7 +107,6 @@ void dump_configuration(struct wm *wm)
     for (size_t i = 0; i < wm->workspace_length; i++) {
         printf("[[WORKSPACE]]\n");
         printf("name = %s\n", wm->workspace[i].name);
-        printf("number = %u\n", wm->workspace[i].number);
         printf("output = %s\n", wm->workspace[i].output);
         print_layout(wm->workspace[i].layout);
     }
@@ -298,9 +297,9 @@ bool get_window_configuration(const struct window *window, struct wm_window *con
     /* merge matching configuration entries into the current configuration */
     for (size_t i = 0; i < Configuration.window_length; i++) {
         struct wm_window *const entry = &Configuration.window[i];
-        if (matches_pattern(entry->name, window->name) &&
-                matches_pattern(entry->class, window->class) &&
-                matches_pattern(entry->instance, window->instance)) {
+        if ((entry->name == NULL || matches_pattern(entry->name, window->name)) &&
+                (entry->class == NULL || matches_pattern(entry->class, window->class)) &&
+                (entry->instance == NULL || matches_pattern(entry->instance, window->instance))) {
             has_entry = true;
             if (entry->workspace != NULL) {
                 configuration->workspace = entry->workspace;
