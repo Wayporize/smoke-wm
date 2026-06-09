@@ -282,7 +282,7 @@ static void parse_border_color(struct toml_parse_context *context,
     case 'a': pointer = &border->color.inactive; break;
     case 'o': pointer = &border->color.floating; break;
     case 'l': pointer = &border->color.tiling; break;
-        break;
+    default: ABORT("consistency error: default branch should not have been triggered");
     }
     read_any_string(context);
     if (!XParseColor(display.xlib, XDefaultColormap(display.xlib, XDefaultScreen(display.xlib)), context->string, &color)) {
@@ -470,6 +470,8 @@ static xcb_button_t resolve_button(struct toml_parse_context *context,
 static enum action_type resolve_action(struct toml_parse_context *context,
         const char *string)
 {
+    (void) context;
+    (void) string;
     /* TODO: implement when actions are there */
     return ACTION_NULL;
 }
@@ -480,6 +482,8 @@ static union action_value resolve_action_value(
 {
     union action_value value;
 
+    (void) context;
+    (void) string;
     /* TODO: implement when actions are there */
     value.value = 0;
 
