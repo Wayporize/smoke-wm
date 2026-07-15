@@ -1,6 +1,8 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include <stdio.h>
+
 /* Output formatted to stdout.
  *
  * Each line is prefixed with the current time.

@@ -730,6 +730,29 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
     }
 }
 
+/* Handle a key being pressed/released. */
+void handle_key_press_or_release(xcb_key_press_event_t *event, bool is_release)
+{
+    const struct action *binding = get_key_binding(is_release, event->state, event->detail);
+    if (binding != NULL) {
+        for (; binding[0].type != ACTION_NONE; binding++) {
+            execute_action(&binding[0]);
+        }
+    }
+}
+
+/* Handle a button being pressed/released. */
+void handle_button_press_or_release(xcb_button_press_event_t *event, bool is_release)
+{
+    bool is_transparent;
+    const struct action *binding = get_button_binding(is_release, event->state, event->detail, &is_transparent);
+    if (binding != NULL) {
+        for (; binding[0].type != ACTION_NONE; binding++) {
+            execute_action(&binding[0]);
+        }
+    }
+}
+
 /* Handle an incoming client message. */
 void handle_client_message(xcb_client_message_event_t *event)
 {
@@ -783,6 +806,16 @@ void handle_server_events(void)
             switch (event->response_type) {
             case XCB_SELECTION_CLEAR: /* we might have lost the manager selection */
                 handle_selection_clear((xcb_selection_clear_event_t*) event);
+                break;
+
+            case XCB_KEY_PRESS:
+            case XCB_KEY_RELEASE:
+                handle_key_press_or_release((xcb_key_press_event_t*) event, event->response_type == XCB_KEY_RELEASE);
+                break;
+
+            case XCB_BUTTON_PRESS:
+            case XCB_BUTTON_RELEASE:
+                handle_button_press_or_release((xcb_button_press_event_t*) event, event->response_type == XCB_BUTTON_RELEASE);
                 break;
 
             case XCB_CREATE_NOTIFY: /* a window was created */

@@ -27,6 +27,9 @@ struct toml_parse_context {
     /* index of the current table, see toml_table_and_key.c */
     unsigned table;
 
+    /* the previously parsed action data type */
+    enum action_data_type action_data_type;
+
     /* current configuration being built */
     struct wm wm;
 

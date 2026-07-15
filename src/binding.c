@@ -20,11 +20,11 @@ struct binding {
     /* an OR combination of the above `BINDING_*` flags */
     unsigned flags;
     /* the actions to execute when the button/key is pressed (terminated by
-     * `ACTION_NULL`)
+     * `ACTION_NONE`)
      */
     struct action *press_actions;
     /* the actions to execute when the button/key is released (terminated by
-     * `ACTION_NULL`)
+     * `ACTION_NONE`)
      */
     struct action *release_actions;
 };
@@ -125,6 +125,8 @@ void clear_bindings(void)
             binding->release_actions = NULL;
         }
     }
+
+    xcb_ungrab_key(display.xcb, XCB_GRAB_ANY, display.root, XCB_MOD_MASK_ANY);
 }
 
 /* Append an action to a binding.
@@ -146,18 +148,18 @@ static void append_binding_action(_Nullable struct binding *binding,
 
         /* get the length of the action list */
         if (actions != NULL) {
-            while (actions[length].type != ACTION_NULL) {
+            while (actions[length].type != ACTION_NONE) {
                 length++;
             }
         }
 
-        /* `length` is now the number of actions excluding `ACTION_NULL` so add
-         * 2 for the new `action` and `ACTION_NULL`
+        /* `length` is now the number of actions excluding `ACTION_NONE` so add
+         * 2 for the new `action` and `ACTION_NONE`
          */
         REALLOCATE(actions, length + 2);
         actions[length] = action;
         length++;
-        actions[length].type = ACTION_NULL;
+        actions[length].type = ACTION_NONE;
 
         if (is_release) {
             binding->release_actions = actions;
@@ -192,6 +194,13 @@ void append_key_binding(bool is_release, xkb_mod_mask_t modifiers,
 
     binding = get_key_binding_pointer(modifiers, key_code);
     append_binding_action(binding, is_release, action);
+
+    const xkb_mod_mask_t num_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_NUM);
+    const xkb_mod_mask_t scroll_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_SCROLL);
+    xcb_grab_key(display.xcb, true, display.root, modifiers, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    xcb_grab_key(display.xcb, true, display.root, modifiers | num_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    xcb_grab_key(display.xcb, true, display.root, modifiers | scroll_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    xcb_grab_key(display.xcb, true, display.root, modifiers | num_mask | scroll_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
 }
 
 /* struct to pass into `xkb_keymap_key_for_each()` for `set_bind_iterator()` */
