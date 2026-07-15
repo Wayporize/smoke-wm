@@ -15,7 +15,6 @@
 #include "display.h"
 #include "monitor.h"
 #include "window.h"
-#include "workspace.h"
 
 /* the information retrieved from the X server and Xkb context */
 struct display display;

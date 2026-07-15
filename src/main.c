@@ -12,6 +12,7 @@
 #include "binding.h"
 #include "configuration.h"
 #include "display.h"
+#include "monitor.h"
 #include "toml.h"
 
 /* name of the executable argument used when running the program */
@@ -43,10 +44,7 @@ void show_version(void)
 int main(int argc, char **argv)
 {
     uid_t user_id;
-    const char *home;
-    struct passwd *passwd;
     char *path;
-    enum wm_ownership_status status;
 
     (void) setlocale(LC_ALL, "");
 
@@ -77,23 +75,23 @@ int main(int argc, char **argv)
     ASSERT(user_id != 0, "smoke-wm is not allowed to be run as root user");
 
     /* get the home directory through HOME or fall back to the passwd entry */
-    home = getenv("HOME");
+    const char *const home = getenv("HOME");
     if (home == NULL || home[0] == '\0') {
-        passwd = getpwuid(user_id);
+        struct passwd *const passwd = getpwuid(user_id);
         user_home = xstrdup(passwd->pw_dir);
-        notef("HOME not set, falling back to passwd entry: %s\n",
+        LOG("HOME not set, falling back to passwd entry: %s\n",
                 passwd->pw_dir);
     } else {
         user_home = xstrdup(home);
     }
 
     /* associated to test "home" */
-    notef("user home: %s\n", user_home);
+    LOG("user home: %s\n", user_home);
 
     path = get_configuration_path();
 
     /* associated to test "configuration-path" */
-    notef("configuration path: %s\n", path);
+    LOG("configuration path: %s\n", path);
 
     open_display();
 
@@ -101,34 +99,35 @@ int main(int argc, char **argv)
     if (path != NULL) {
         if (parse_toml_configuration(path, &Configuration) == 0) {
             /* associated to test "toml" */
-            notef("parsing configuration succeeded\n");
+            LOG("parsing configuration succeeded\n");
             set_configuration_bindings(&Configuration);
-            report_configuration_change_to_workspaces(&Configuration);
+            report_configuration_change_to_workspaces(Configuration.workspace, Configuration.workspace_length);
+            report_configuration_change_to_windows(Configuration.window, Configuration.window_length);
         } else {
             /* associated to test "toml" */
-            notef("parsing configuration failed\n");
+            LOG("parsing configuration failed\n");
             Configuration = Configuration_default;
             /* TODO: set default bindings */
         }
         free(path);
     } else {
-        notef("no configuration, using default\n");
+        LOG("no configuration, using default\n");
         Configuration = Configuration_default;
         /* TODO: set default bindings */
     }
 
     /* associated to test "configuration" */
-    notef("start of dumping configuration\n");
+    LOG("start of dumping configuration\n");
     dump_configuration(&Configuration);
-    notef("end of dumping configuration\n");
+    LOG("end of dumping configuration\n");
 
     /* associated to test "bindings" */
-    notef("start of dumping bindings\n");
+    LOG("start of dumping bindings\n");
     dump_bindings();
-    notef("end of dumping bindings\n");
+    LOG("end of dumping bindings\n");
 
     /* try to become the active window manager */
-    status = take_wm_ownership();
+    const enum wm_ownership_status status = take_wm_ownership();
     ASSERT(status == WM_OWNERSHIP_SUCCESS, "could not become the window manager");
 
     /* receive all events by the server and handle them */

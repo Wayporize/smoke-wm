@@ -55,12 +55,14 @@ wait_for_line() {
 XDG_CONFIG_HOME="$temp" XDG_CONFIG_DIRS= "$SMOKE_WM_FAKE_RANDR" >"$fifo" &
 
 # Before the configuration kicks in
-wait_for_line "workspace 1 is now associated to monitor 11"
-wait_for_line "workspace 2 is now associated to monitor 12"
+wait_for_line "workspace 1 added to monitor 11"
+wait_for_line "workspace 2 added to monitor 12"
 
 # After the configuration kicked in
-wait_for_line "workspace Chat is now associated to monitor 12"
-wait_for_line "workspace Primary is now associated to monitor 11"
+wait_for_line "workspace 2 changes name to Chat"
+wait_for_line "workspace 1 changes name to Primary"
+# The name is once again overwritten because Primary was empty
+wait_for_line "workspace Primary changes name to Exist"
 
 # Try some combinations of starting st/xterm and make sure that all open on the
 # correct workspace

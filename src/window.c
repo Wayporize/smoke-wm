@@ -7,8 +7,8 @@
 
 #include "configuration.h"
 #include "display.h"
+#include "monitor.h"
 #include "window.h"
-#include "workspace.h"
 
 /* list of all windows */
 STATIC_LIST(struct window*, windows);
@@ -92,8 +92,15 @@ static void set_initial_size(struct window *window)
  */
 static int focus_window(struct window *window)
 {
+    /* check if the window needs us to focus it directly */
+    if (((window->hints.flags & XCB_ICCCM_WM_HINT_INPUT) && window->hints.input) ||
+                /* assume input = true if missing */
+                !(window->hints.flags & XCB_ICCCM_WM_HINT_INPUT)) {
+        /* `FOCUS_NONE` for full manual management */
+        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE, window->id, display.last_timestamp);
+        return 0;
     /* send a client message if the `WM_TAKE_FOCUS` protocol is supported */
-    if (window->protocols.has_wm_take_focus) {
+    } else if (window->protocols.has_wm_take_focus) {
         xcb_client_message_event_t message;
 
         message.response_type = XCB_CLIENT_MESSAGE;
@@ -102,30 +109,20 @@ static int focus_window(struct window *window)
         message.type = display.wm_protocols;
         message.data.data32[0] = display.wm_take_focus;
         message.data.data32[1] = display.last_timestamp;
-        xcb_send_event(display.xcb, false, window->id,
-                XCB_EVENT_MASK_NO_EVENT, (char*) &message);
-        return 0;
-    /* check if the window needs us to focus it directly */
-    } else if (((window->hints.flags & XCB_ICCCM_WM_HINT_INPUT) && window->hints.input) ||
-                /* assume input = true if missing */
-                !(window->hints.flags & XCB_ICCCM_WM_HINT_INPUT)) {
-        /* `FOCUS_NONE` for full manual management */
-        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE,
-                window->id, display.last_timestamp);
+        xcb_send_event(display.xcb, false, window->id, XCB_EVENT_MASK_NO_EVENT, (char*) &message);
         return 0;
     }
     return 1;
 }
 
 /* Start to actually manage the window. */
-void manage_new_window(struct window *window)
+void manage_new_window(struct window *window, struct wm_window *configuration)
 {
     xcb_get_property_cookie_t hints_cookie, normal_hints_cookie, protocols_cookie,
                               name_cookie, class_cookie;
     xcb_icccm_get_wm_protocols_reply_t protocols;
     xcb_icccm_get_text_property_reply_t text;
     xcb_icccm_get_wm_class_reply_t class;
-    struct wm_window configuration;
 
     hints_cookie = xcb_icccm_get_wm_hints(display.xcb, window->id);
     normal_hints_cookie = xcb_icccm_get_wm_normal_hints(display.xcb, window->id);
@@ -154,7 +151,7 @@ void manage_new_window(struct window *window)
     window->class = xstrdup(class.class_name);
     xcb_icccm_get_wm_class_reply_wipe(&class);
 
-    get_window_configuration(window, &configuration);
+    get_window_configuration(window, configuration);
 
     set_initial_size(window);
 
@@ -183,7 +180,9 @@ void handle_map_request(xcb_map_request_event_t *event)
 
     /* check if the window is mapped for the first time */
     if (window->state == XCB_ICCCM_WM_STATE_NEW) {
-        manage_new_window(window);
+        struct wm_window configuration;
+
+        manage_new_window(window, &configuration);
 
         if ((window->hints.flags & XCB_ICCCM_WM_HINT_STATE)) {
             window->state = window->hints.initial_state;
@@ -191,7 +190,7 @@ void handle_map_request(xcb_map_request_event_t *event)
             window->state = XCB_ICCCM_WM_STATE_NORMAL;
         }
 
-        add_window_to_workspace(window);
+        add_window_to_workspace(configuration.workspace, window);
     } else {
         /* transition the state in compliance with ICCCM */
         if (window->state == XCB_ICCCM_WM_STATE_WITHDRAWN) {
@@ -203,11 +202,12 @@ void handle_map_request(xcb_map_request_event_t *event)
         } else if (window->state == XCB_ICCCM_WM_STATE_ICONIC) {
             window->state = XCB_ICCCM_WM_STATE_NORMAL;
         }
+    }
 
-        /* let the workspace change window state based on its own state like it
-         * does in `add_window_to_workspace()`
-         */
-        relay_map_request_to_workspaces(window);
+    /* overrule the window state according to the workspace state */
+    struct workspace *const workspace = get_window_workspace(window);
+    if (workspace != NULL && workspace->state == WORKSPACE_HIDDEN) {
+        window->state = XCB_ICCCM_WM_STATE_ICONIC;
     }
 
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
@@ -286,12 +286,45 @@ void configure_window(xcb_configure_notify_event_t *event)
     struct window *const window = get_internal_window(event->window);
     if (window != NULL && (event->x != window->x || event->y != window->y ||
                 event->width != window->width || event->height != window->height)) {
+        struct workspace *workspace;
+
         window->x = event->x;
         window->y = event->y;
         window->width = event->width;
         window->height = event->height;
-        notef("window position and size of %" PRIu32 " changed\n", window->id);
-        report_window_movement_to_workspaces(window);
+        notef("window position and size of %#" PRIx32 " changed\n", window->id);
+
+        /* change the workspace based on the new position */
+        if (window->state != XCB_ICCCM_WM_STATE_NORMAL) {
+            /* ignore invisible windows */
+            return;
+        }
+        workspace = get_window_workspace(window);
+        if (workspace == NULL) {
+            /* do not add it to a workspace if it was not associated to any */
+            return;
+        }
+
+        struct monitor *const monitor = get_monitor_from_rectangle(window->x, window->y, window->width, window->height);
+        if (monitor == NULL) {
+            return;
+        }
+
+        /* get the active workspace */
+        struct workspace *active_workspace = NULL;
+        for (size_t i = 0; i < monitor->workspaces_length; i++) {
+            if (monitor->workspaces[i] == workspace) {
+                /* the window is already on the workspace it is supposed to be
+                 * on
+                 */
+                return;
+            }
+            if (monitor->workspaces[i]->state >= WORKSPACE_VISIBLE) {
+                active_workspace = monitor->workspaces[i];
+            }
+        }
+
+        add_window_to_workspace(active_workspace->name, window);
     }
 }
 
@@ -307,8 +340,7 @@ void destroy_window(xcb_destroy_notify_event_t *event)
 
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i] == window) {
-            windows_length--;
-            MOVE(&windows[i], &windows[i + 1], windows_length - i);
+            LIST_REMOVE(windows, i, 1);
             break;
         }
     }
@@ -318,4 +350,53 @@ void destroy_window(xcb_destroy_notify_event_t *event)
     }
 
     notef("window %#x destruction registered\n", event->window);
+}
+
+/* Get the position of the window relative to the workspace/output it is on. */
+static void get_relative_window_position(struct window *window, int32_t *x, int32_t *y)
+{
+    struct workspace *workspace;
+    struct monitor *monitor;
+
+    workspace = get_window_workspace(window);
+    if (workspace != NULL) {
+        monitor = workspace->monitor;
+    } else {
+        monitor = get_monitor_from_rectangle(window->x, window->y, window->width, window->height);
+    }
+
+    if (monitor == NULL) {
+        *x = window->x;
+        *y = window->y;
+    } else {
+        *x = window->x - monitor->x;
+        *y = window->y - monitor->y;
+    }
+}
+
+/* Notify the window module that the configuration has changed. */
+void report_configuration_change_to_windows(struct wm_window *configured, size_t configured_length)
+{
+    for (size_t i = 0; i < configured_length; i++) {
+        /* move the matching windows to their configured workspace/output */
+        for (size_t j = 0; j < windows_length; j++) {
+            if ((configured[i].name == NULL || matches_pattern(configured[i].name, windows[j]->name)) &&
+                    (configured[i].class == NULL || matches_pattern(configured[i].class, windows[j]->class)) &&
+                    (configured[i].instance == NULL || matches_pattern(configured[i].instance, windows[j]->instance))) {
+                if (configured[i].workspace != NULL) {
+                    add_window_to_workspace(configured[i].workspace, windows[j]);
+                } else if (configured[i].output != NULL) {
+                    int32_t x, y;
+                    struct monitor *const monitor = get_monitor_from_output_name(configured[i].output);
+                    get_relative_window_position(windows[j], &x, &y);
+                    remove_window_from_workspace(windows[j]);
+                    windows[j]->x = monitor->x + x;
+                    windows[j]->y = monitor->y + y;
+                    const uint16_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
+                    const uint32_t values[] = { windows[j]->x, windows[j]->y };
+                    xcb_configure_window(display.xcb, windows[j]->id, mask, values);
+                }
+            }
+        }
+    }
 }

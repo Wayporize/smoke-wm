@@ -9,7 +9,6 @@
 
 #include "action.h"
 #include "tiling.h"
-#include "workspace.h"
 #include "window.h"
 
 /* TODO: put me somewhere else */

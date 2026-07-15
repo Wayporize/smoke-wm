@@ -1,6 +1,7 @@
 #include <utility/utility.h>
 
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 
 /**
  * This window is a simple implementation of handling `WM_TAKE_FOCUS`.
@@ -14,6 +15,7 @@ int main(int argc, char **argv)
     Atom wm_protocols_atom;
     Atom wm_take_focus_atom;
     Atom protocols[1];
+    XWMHints wm_hints;
 
     /* make stdout line buffered */
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -39,6 +41,9 @@ int main(int argc, char **argv)
     wm_take_focus_atom = XInternAtom(display, "WM_TAKE_FOCUS", False);
     protocols[0] = wm_take_focus_atom;
     XSetWMProtocols(display, window, protocols, SIZE(protocols));
+    wm_hints.flags = InputHint;
+    wm_hints.input = False;
+    XSetWMHints(display, window, &wm_hints);
 
     XMapWindow(display, window);
 

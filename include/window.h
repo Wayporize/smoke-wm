@@ -8,6 +8,7 @@
 /* another state for `xcb_icccm_wm_state_t` to indicate the window is new */
 #define XCB_ICCCM_WM_STATE_NEW ((xcb_icccm_wm_state_t) 4)
 
+struct workspace;
 /* cache for properties and geometry of an X11 window */
 struct window {
     /* the X11 window id */
@@ -56,5 +57,13 @@ void configure_window(xcb_configure_notify_event_t *event);
 
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);
+
+struct wm_window;
+/* Notify the window module that the configuration has changed.
+ *
+ * @configured        are the new configuration entries.
+ * @configured_length is the number of new configuration entries.
+ */
+void report_configuration_change_to_windows(struct wm_window *configured, size_t configured_length);
 
 #endif
