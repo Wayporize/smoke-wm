@@ -328,6 +328,23 @@ void configure_window(xcb_configure_notify_event_t *event)
     }
 }
 
+/* Update the state of a window. */
+void hide_window(xcb_unmap_notify_event_t *event)
+{
+    struct window *const window = get_internal_window(event->window);
+    if (window == NULL) {
+        return;
+    }
+    if ((event->response_type & 0x80)) {
+        window->state = XCB_ICCCM_WM_STATE_WITHDRAWN;
+    } else {
+        window->state = XCB_ICCCM_WM_STATE_ICONIC;
+    }
+    if (window->id == display.focus) {
+        (void) focus_next_available_window();
+    }
+}
+
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event)
 {
@@ -345,11 +362,17 @@ void destroy_window(xcb_destroy_notify_event_t *event)
         }
     }
 
-    if (event->window == display.focus) {
+    if (window->id == display.focus) {
         (void) focus_next_available_window();
     }
 
-    notef("window %#x destruction registered\n", event->window);
+    notef("window %#x destruction registered\n", window->id);
+
+    /* free all window resources */
+    free(window->name);
+    free(window->instance);
+    free(window->class);
+    free(window);
 }
 
 /* Get the position of the window relative to the workspace/output it is on. */

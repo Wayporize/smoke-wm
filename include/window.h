@@ -55,6 +55,9 @@ void handle_configure_request(xcb_configure_request_event_t *event);
 /* Configure the size of a window, this only affects the internal state. */
 void configure_window(xcb_configure_notify_event_t *event);
 
+/* Update the state of a window. */
+void hide_window(xcb_unmap_notify_event_t *event);
+
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);
 

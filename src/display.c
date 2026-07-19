@@ -809,12 +809,12 @@ void handle_server_events(void)
                 break;
 
             case XCB_KEY_PRESS:
-            case XCB_KEY_RELEASE:
+            case XCB_KEY_RELEASE: /* the user presser or released a grabbed key */
                 handle_key_press_or_release((xcb_key_press_event_t*) event, event->response_type == XCB_KEY_RELEASE);
                 break;
 
             case XCB_BUTTON_PRESS:
-            case XCB_BUTTON_RELEASE:
+            case XCB_BUTTON_RELEASE: /* the user presser or released a grabbed button */
                 handle_button_press_or_release((xcb_button_press_event_t*) event, event->response_type == XCB_BUTTON_RELEASE);
                 break;
 
@@ -844,8 +844,12 @@ void handle_server_events(void)
                 focus = (xcb_focus_in_event_t*) event;
                 /* other modes are related to grabs which are just temporary
                  * which does not concern us for now
+                 *
+                 * however, there is an edge case with key bindings which open a
+                 * window, so there is an active grab... just checking for
+                 * ungrabs seems safe
                  */
-                if (focus->mode == XCB_NOTIFY_MODE_NORMAL) {
+                if (focus->mode == XCB_NOTIFY_MODE_NORMAL || focus->mode == XCB_NOTIFY_MODE_UNGRAB) {
                     /* the window got directly focused */
                     if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
                             /* "virtual" means an inferior got focused but not the
@@ -883,6 +887,11 @@ void handle_server_events(void)
                 break;
             }
 
+            case (0x80 | XCB_UNMAP_NOTIFY):
+            case XCB_UNMAP_NOTIFY: /* a window was hidden */
+                hide_window((xcb_unmap_notify_event_t*) event);
+                break;
+
             case XCB_DESTROY_NOTIFY: /* a window was destroyed */
                 destroy_window((xcb_destroy_notify_event_t*) event);
                 break;
@@ -895,10 +904,6 @@ void handle_server_events(void)
                 handle_client_message((xcb_client_message_event_t*) event);
                 break;
 
-            case XCB_UNMAP_NOTIFY: /* a window was hidden */
-                /* TODO: react to this by setting the window state,
-                 * also react to the synthetic event which carries extra meaning
-                 */
             case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
