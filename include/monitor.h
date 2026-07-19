@@ -2,6 +2,7 @@
 #define MONITOR_H
 
 #include <utility/attributes.h>
+#include <utility/list.h>
 #include <utility/types.h>
 
 #include <xcb/randr.h>

@@ -583,6 +583,7 @@ static void change_active_workspace(struct workspace *active)
     /* map new windows if the workspace was previously hidden */
     if (active->state == WORKSPACE_HIDDEN) {
         for (size_t i = 0; i < active->windows_length; i++) {
+            notef("showing window %#" PRIx32 "\n", active->windows[i]->id);
             xcb_map_window(display.xcb, active->windows[i]->id);
         }
     }
@@ -591,6 +592,7 @@ static void change_active_workspace(struct workspace *active)
     if (old_active->monitor == active->monitor) {
         old_active->state = WORKSPACE_HIDDEN;
         for (size_t i = 0; i < old_active->windows_length; i++) {
+            notef("hiding window %#" PRIx32 "\n", old_active->windows[i]->id);
             xcb_unmap_window(display.xcb, old_active->windows[i]->id);
         }
     } else {

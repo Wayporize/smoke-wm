@@ -482,11 +482,15 @@ static union action_value resolve_action_value(
         struct toml_parse_context *context,
         const char *string)
 {
-    enum action_data_type type;
     union action_value value;
 
-    if (isdigit(string[0])) {
-        type = ACTION_DATA_INTEGER;
+    if (context->action_data_type == ACTION_DATA_NULL) {
+        emit_error(context, "which action is this an argument for?");
+    }
+
+    if (context->action_data_type == ACTION_DATA_STRING) {
+        value.string = xstrdup(string);
+    } else if (isdigit(string[0])) {
         value.integer = 0;
         while (isdigit(string[0])) {
             value.integer *= 10;
@@ -494,16 +498,7 @@ static union action_value resolve_action_value(
             string++;
         }
     } else {
-        type = ACTION_DATA_STRING;
-        value.string = xstrdup(string);
-    }
-
-    if (context->action_data_type != type) {
-        if (context->action_data_type == ACTION_DATA_NULL) {
-            emit_error(context, "which action is this an argument for?");
-        } else {
-            emit_error(context, "invalid action data type");
-        }
+        emit_error(context, "invalid action data type");
     }
 
     return value;

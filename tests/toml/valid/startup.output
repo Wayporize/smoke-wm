@@ -32,6 +32,8 @@ border.color.tiling.green = 0x0000
 border.color.tiling.blue = 0x0000
 border.color.tiling.alpha = 0xffff
 [[STARTUP]]
-TODO: action, value
+action = RUN
+value = programA
 [[STARTUP]]
-TODO: action, value
+action = RUN
+value = shellProgramB

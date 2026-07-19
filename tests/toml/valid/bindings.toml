@@ -6,7 +6,7 @@ action = "close"
 
 [wm.bindings]
 
-"Mod4+h" = "move:left"
+"Mod4+h" = "run:xterm"
 
 [[wm.binding]]
 transparent = true
@@ -18,8 +18,8 @@ argument = "pressed"
 [[wm.binding]]
 modifiers = "Mod4"
 key = "a"
-action = "focus"
-argument = "left"
+action = "run"
+argument = "xterm"
 
 [[wm.binding]]
 modifiers = "Control+Lock+Shift+Mod1+Mod2+Mod3+Mod4"

@@ -3,6 +3,7 @@
 #include <utility/utility.h>
 
 #include "action.h"
+#include "monitor.h"
 
 static const struct action_specification {
     const char *name;
@@ -36,29 +37,72 @@ enum action_type convert_string_to_action_type(const char *string)
     return ACTION_NULL;
 }
 
+/* Get a string representation of an action type. */
+const char *get_string_of_action_type(enum action_type type)
+{
+    return action_specifications[type].name;
+}
+
 /* Get the data type a specific action requires. */
 enum action_data_type get_data_type_of_action_type(enum action_type type)
 {
     return action_specifications[type].data_type;
 }
 
-/* Execute a user action. */
-void execute_action(const struct action *action)
+/* Print the action value to stdout. */
+void print_action_value(enum action_type type, union action_value value, const char *prefix)
 {
-    LOG("running action %s", action_specifications[action->type].name);
-    switch (get_data_type_of_action_type(action->type)) {
+    switch (get_data_type_of_action_type(type)) {
     case ACTION_DATA_NULL:
-        UNREACHABLE;
     case ACTION_DATA_VOID:
         /* nothing to print */
         break;
     case ACTION_DATA_INTEGER:
-        printf(": %d", action->value.integer);
+        printf("%s%d", prefix, value.integer);
         break;
     case ACTION_DATA_STRING:
-        printf(": %s", action->value.string);
+        printf("%s%s", prefix, value.string);
         break;
     }
-    printf("\n");
 }
 
+static void NONE(union action_value value)
+{
+    (void) value;
+}
+
+static void WORKSPACE(union action_value value)
+{
+    focus_workspace(value.string);
+}
+
+static void FOCUS(union action_value value)
+{
+    (void) value;
+    /* TODO: */
+}
+
+static void CLOSE(union action_value value)
+{
+    (void) value;
+    /* TODO: */
+}
+
+static void RUN(union action_value value)
+{
+    run_shell(value.string);
+}
+
+/* Execute a user action. */
+void execute_action(const struct action *action)
+{
+    LOG("running action %s", action_specifications[action->type].name);
+    print_action_value(action->type, action->value, ": ");
+    printf("\n");
+    switch (action->type) {
+    case ACTION_NULL: /* do the same as NONE */
+#define X(name, type) case ACTION_##name: name(action->value); break;
+    DECLARE_ALL_ACTIONS
+#undef X
+    }
+}
