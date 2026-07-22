@@ -28,6 +28,8 @@ struct window {
     } protocols;
     /* window text properties */
     utf8_t *name, *instance, *class;
+    /* focus number: the higher the number, the more recent the focus */
+    uint64_t focus;
 };
 
 /* TODO: Go through all windows that already exist and manage them. */
@@ -49,6 +51,9 @@ void change_property(xcb_property_notify_event_t *event);
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 
+/* Update the focus numbers. */
+void update_window_focus(struct window *window);
+
 /* Handle when a client wants to change the geometry or stacking of a window. */
 void handle_configure_request(xcb_configure_request_event_t *event);
 
@@ -57,6 +62,12 @@ void configure_window(xcb_configure_notify_event_t *event);
 
 /* Update the state of a window. */
 void hide_window(xcb_unmap_notify_event_t *event);
+
+/* Close a specific window. */
+void close_window(xcb_window_t window);
+
+/* Move a window to a different workspace/output. */
+void move_window(xcb_window_t window, const utf8_t *destination);
 
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);

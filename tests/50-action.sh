@@ -25,7 +25,6 @@ EOF
 
 wait_for_line() {
     while read -t 4 -r line ; do
-        echo "$line"
         line="${line#\[*\] }"
         if [[ "$line" =~ $1 ]] ; then
             return 0

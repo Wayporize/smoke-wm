@@ -104,6 +104,15 @@ struct workspace *get_window_workspace(struct window *window);
  */
 void focus_workspace(const utf8_t *name);
 
+/* Move the current workspace to given destination.
+ *
+ * @destination can either be another workspace or an output.
+ */
+void move_workspace(const utf8_t *destination);
+
+/* Rename the current workspace to @name. */
+void rename_workspace(const utf8_t *name);
+
 /* Notify the workspace module that the focus has changed. */
 void report_focus_change_to_workspaces(struct window *window);
 

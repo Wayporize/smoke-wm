@@ -873,6 +873,7 @@ static void parse_wm_binding_action(struct toml_parse_context *context)
     }
 
     parse_action_type(context, &context->wm.binding[context->wm.binding_length - 1].action);
+    ZERO(&context->wm.binding[context->wm.binding_length - 1].value, 1);
 }
 
 static void parse_wm_binding_argument(struct toml_parse_context *context)
@@ -924,23 +925,20 @@ static void parse_wm_bindings(struct toml_parse_context *context)
 static void parse_wm_startup_action(struct toml_parse_context *context)
 {
     if (context->wm.startup_length == 0) {
-        emit_error(context,
-                "can not modify 'startup' if no entry was defined yet");
+        emit_error(context, "can not modify 'startup' if no entry was defined yet");
     }
 
-    parse_action_type(context,
-            &context->wm.startup[context->wm.startup_length - 1].action);
+    parse_action_type(context, &context->wm.startup[context->wm.startup_length - 1].action);
+    ZERO(&context->wm.startup[context->wm.startup_length - 1].value, 1);
 }
 
 static void parse_wm_startup_argument(struct toml_parse_context *context)
 {
     if (context->wm.startup_length == 0) {
-        emit_error(context,
-                "can not modify 'startup' if no entry was defined yet");
+        emit_error(context, "can not modify 'startup' if no entry was defined yet");
     }
 
-    parse_action_argument(context,
-            &context->wm.startup[context->wm.startup_length - 1].value);
+    parse_action_argument(context, &context->wm.startup[context->wm.startup_length - 1].value);
 }
 
 /* Parse a table header [[?word(.word)*]?] and move into the table. */

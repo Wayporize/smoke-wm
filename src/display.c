@@ -876,6 +876,7 @@ void handle_server_events(void)
                         struct window *const window = get_internal_window(focus->event);
                         if (window != NULL) {
                             report_focus_change_to_workspaces(window);
+                            update_window_focus(window);
                         }
                     } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {

@@ -1,9 +1,12 @@
 #include <ctype.h>
 #include <utility/log.h>
 #include <utility/utility.h>
+#undef MOVE
 
 #include "action.h"
+#include "display.h"
 #include "monitor.h"
+#include "window.h"
 
 static const struct action_specification {
     const char *name;
@@ -25,7 +28,11 @@ enum action_type convert_string_to_action_type(const char *string)
         if (u >= upper + sizeof(upper)) {
             return ACTION_NULL;
         }
-        u[0] = toupper(string[0]);
+        if (string[0] == '-') {
+            u[0] = '_';
+        } else {
+            u[0] = toupper(string[0]);
+        }
         string++;
     }
     u[0] = '\0';
@@ -68,29 +75,71 @@ void print_action_value(enum action_type type, union action_value value, const c
 
 static void NONE(union action_value value)
 {
+    /* do nothing */
     (void) value;
-}
-
-static void WORKSPACE(union action_value value)
-{
-    focus_workspace(value.string);
-}
-
-static void FOCUS(union action_value value)
-{
-    (void) value;
-    /* TODO: */
-}
-
-static void CLOSE(union action_value value)
-{
-    (void) value;
-    /* TODO: */
 }
 
 static void RUN(union action_value value)
 {
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user */
+        return;
+    }
     run_shell(value.string);
+}
+
+static void CLOSE(union action_value value)
+{
+    /* unused */
+    (void) value;
+
+    close_window(display.focus);
+}
+
+static void FOCUS(union action_value value)
+{
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user? */
+        return;
+    }
+    (void) value;
+    /* TODO: */
+}
+
+static void MOVE(union action_value value)
+{
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user */
+        return;
+    }
+    move_window(display.focus, value.string);
+}
+
+static void FOCUS_WORKSPACE(union action_value value)
+{
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user */
+        return;
+    }
+    focus_workspace(value.string);
+}
+
+static void MOVE_WORKSPACE(union action_value value)
+{
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user */
+        return;
+    }
+    move_workspace(value.string);
+}
+
+static void RENAME_WORKSPACE(union action_value value)
+{
+    if (value.string == NULL || value.string[0] == '\0') {
+        /* TODO: prompt user */
+        return;
+    }
+    rename_workspace(value.string);
 }
 
 /* Execute a user action. */

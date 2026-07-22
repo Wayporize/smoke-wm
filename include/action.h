@@ -11,10 +11,13 @@
 
 #define DECLARE_ALL_ACTIONS \
     X(NONE, VOID) \
-    X(FOCUS, STRING) \
-    X(CLOSE, VOID) \
     X(RUN, STRING) \
-    X(WORKSPACE, STRING)
+    X(CLOSE, VOID) \
+    X(FOCUS, STRING) \
+    X(MOVE, STRING) \
+    X(FOCUS_WORKSPACE, STRING) \
+    X(MOVE_WORKSPACE, STRING) \
+    X(RENAME_WORKSPACE, STRING)
 
 /* type of the action, this implies the action value type */
 enum action_type {
