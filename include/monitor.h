@@ -33,8 +33,6 @@ struct workspace {
     enum workspace_state state;
     /* a list of windows associated to this workspace */
     LIST(struct window*, windows);
-    /* the monitor this workspace is on */
-    struct monitor *monitor;
 };
 
 /* physical output device */
@@ -84,6 +82,9 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc,
 void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotation_t rotation,
         int32_t x, int32_t y, int32_t width, int32_t height);
 
+/* Change a window to a different workspace. */
+void change_window_workspace_directly(struct window *window, struct workspace *workspace);
+
 /* Add a window to a workspace.
  *
  * @name may be `NULL` in which case the window is added to the active
@@ -94,6 +95,15 @@ void add_window_to_workspace(const utf8_t *name, struct window *window);
 
 /* Remove the window from its current workspace. */
 void remove_window_from_workspace(struct window *window);
+
+/* Change a window to the specified workspace.
+ *
+ * @return 1 if the workspace does not exist, 0 if the movement was successful.
+ */
+int change_window_workspace(struct window *window, const utf8_t *name);
+
+/* Get the monitor a workspace is on. */
+struct monitor *get_workspace_monitor(struct workspace *workspace);
 
 /* Get the workspace a window is on. */
 struct workspace *get_window_workspace(struct window *window);

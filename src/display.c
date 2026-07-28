@@ -888,9 +888,16 @@ void handle_server_events(void)
                 break;
             }
 
-            case (0x80 | XCB_UNMAP_NOTIFY):
+            case (0x80 | XCB_UNMAP_NOTIFY): /* a client wants to withdraw a window */
+                change_window_state(((xcb_unmap_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+                break;
+
             case XCB_UNMAP_NOTIFY: /* a window was hidden */
-                hide_window((xcb_unmap_notify_event_t*) event);
+                change_window_state(((xcb_unmap_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_ICONIC);
+                break;
+
+            case XCB_MAP_NOTIFY: /* a window was shown */
+                change_window_state(((xcb_map_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_NORMAL);
                 break;
 
             case XCB_DESTROY_NOTIFY: /* a window was destroyed */
@@ -905,7 +912,6 @@ void handle_server_events(void)
                 handle_client_message((xcb_client_message_event_t*) event);
                 break;
 
-            case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;

@@ -48,10 +48,16 @@ void create_window(xcb_create_notify_event_t *event);
  */
 void change_property(xcb_property_notify_event_t *event);
 
+/* If the window can receive focus. */
+bool is_focusable(struct window *window);
+
+/* Focus a specific window in the X world. */
+void focus_window(struct window *window);
+
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 
-/* Update the focus numbers. */
+/* Update the focus number of @window to be the most recent. */
 void update_window_focus(struct window *window);
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
@@ -61,7 +67,7 @@ void handle_configure_request(xcb_configure_request_event_t *event);
 void configure_window(xcb_configure_notify_event_t *event);
 
 /* Update the state of a window. */
-void hide_window(xcb_unmap_notify_event_t *event);
+void change_window_state(xcb_window_t window, xcb_icccm_wm_state_t state);
 
 /* Close a specific window. */
 void close_window(xcb_window_t window);
