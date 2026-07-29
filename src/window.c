@@ -254,13 +254,13 @@ void update_window_focus(struct window *window)
         if (windows[i] == window) {
             continue;
         }
-        if (maximum_focus < windows[i]->focus) {
-            maximum_focus = windows[i]->focus;
+        if (maximum_focus < windows[i]->focus_order) {
+            maximum_focus = windows[i]->focus_order;
         }
     }
 
     /* make sure the window has the biggest focus of all */
-    window->focus = maximum_focus + 1;
+    window->focus_order = maximum_focus + 1;
 }
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
@@ -326,7 +326,7 @@ static void focus_next_available_window(struct window *window)
         search_windows_length = workspace->windows_length;
     }
 
-    uint64_t max_focus = 0;
+    uint64_t maximum_focus = 0;
     struct window *candidate_window = NULL;
     for (size_t i = 0; i < search_windows_length; i++) {
         if (search_windows[i] == window) {
@@ -338,8 +338,8 @@ static void focus_next_available_window(struct window *window)
             continue;
         }
         /* prefer the window if it was focused more recently */
-        if (search_windows[i]->focus >= max_focus) {
-            max_focus = search_windows[i]->focus;
+        if (search_windows[i]->focus_order >= maximum_focus) {
+            maximum_focus = search_windows[i]->focus_order;
             candidate_window = search_windows[i];
         }
     }

@@ -674,13 +674,13 @@ void focus_workspace(const utf8_t *name)
 
     /* focus the window on that workspace */
     struct window *candidate = NULL;
-    uint64_t focus = 0;
+    uint64_t maximum_focus = 0;
     for (size_t i = 0; i < workspace->windows_length; i++) {
         if (!is_focusable(workspace->windows[i])) {
             continue;
         }
-        if (focus < workspace->windows[i]->focus) {
-            focus = workspace->windows[i]->focus;
+        if (maximum_focus < workspace->windows[i]->focus_order) {
+            maximum_focus = workspace->windows[i]->focus_order;
             candidate = workspace->windows[i];
         }
     }

@@ -26,10 +26,10 @@ struct window {
         /* if the `WM_TAKE_FOCUS` client message can be used */
         bool has_wm_take_focus;
     } protocols;
+    /* focus number: the higher the number, the more recent the focus */
+    uint64_t focus_order;
     /* window text properties */
     utf8_t *name, *instance, *class;
-    /* focus number: the higher the number, the more recent the focus */
-    uint64_t focus;
 };
 
 /* TODO: Go through all windows that already exist and manage them. */
