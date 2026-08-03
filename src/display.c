@@ -883,7 +883,8 @@ void handle_server_events(void)
                         LOG("focus changed to %#" PRIx32 "\n", focus->event);
                         struct window *window = get_internal_window(focus->event);
                         if (window != NULL) {
-                            if (window->frame == focus->event) {
+                            /* if the outer window is focused, focus the inner window */
+                            if (window->outer_id == focus->event && window->outer_id != window->id) {
                                 focus_window(window);
                             } else {
                                 update_window_focus(window);

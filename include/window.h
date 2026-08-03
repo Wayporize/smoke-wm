@@ -11,9 +11,12 @@
 struct workspace;
 /* cache for properties and geometry of an X11 window */
 struct window {
-    /* the X11 window id and its surrounding parent frame */
-    xcb_window_t id, frame;
-    /* graphics context */
+    /* The outer window id and the inner window id.
+     * If a window has a frame, `id` will the be original window and `outer_id`
+     * the frame id.  If the window has no frame, `id` is the window id and
+     * `outer_id` is the exact same. */
+    xcb_window_t id, outer_id;
+    /* graphics context for painting on window frames */
     xcb_gcontext_t gc;
     /* position and size of the window */
     int32_t x, y, width, height;
@@ -55,12 +58,6 @@ void change_property(xcb_property_notify_event_t *event);
 
 /* If the window can receive focus. */
 bool is_focusable(struct window *window);
-
-/* Show a window in the X world. */
-void show_window(struct window *window);
-
-/* Hide a window in the X world. */
-void hide_window(struct window *window);
 
 /* Focus a specific window in the X world. */
 void focus_window(struct window *window);
