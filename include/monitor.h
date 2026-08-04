@@ -111,6 +111,9 @@ struct monitor *get_workspace_monitor(struct workspace *workspace);
 /* Get the workspace a window is on. */
 struct workspace *get_window_workspace(struct window *window);
 
+/* Get the currently active workspace. */
+struct workspace *get_active_workspace(void);
+
 /* Focus the workspace identified by id @name.
  *
  * At least one workspace MUST exist already.

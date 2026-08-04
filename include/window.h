@@ -68,10 +68,16 @@ void grab_button_on_all_windows(uint16_t event_mask, uint8_t button, uint16_t mo
 /* Ungrab a button on every managed window. */
 void ungrab_button_on_all_windows(uint8_t button, uint16_t modifiers);
 
+/* Try to focus a window that makes sense or the root if none available. */
+void focus_next_available_window(void);
+
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 
-/* Update the focus number of @window to be the most recent. */
+/* Update the internal window focus to a new window.
+ *
+ * @window may be `NULL` in which case the root is the new focus.
+ */
 void update_window_focus(struct window *window);
 
 /* Handle when a client wants to change the geometry or stacking of a window. */

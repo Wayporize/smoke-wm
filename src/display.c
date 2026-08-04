@@ -847,6 +847,8 @@ void handle_server_events(void)
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
 
+            /* we listen for focus events on the root window `display.root`, our
+             * frame windows and all windows within those frames */
             case XCB_FOCUS_IN: { /* a window gained focus */
                 xcb_focus_in_event_t *focus;
 
@@ -859,51 +861,51 @@ void handle_server_events(void)
                  * ungrabs seems safe
                  */
                 if (focus->mode == XCB_NOTIFY_MODE_NORMAL || focus->mode == XCB_NOTIFY_MODE_UNGRAB) {
-                    /* the window got directly focused */
-                    if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
-                            /* "virtual" means an inferior got focused but not the
-                             * window itself
-                             */
-                            ((focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
-                                focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL) &&
-                                /* if the root is focused here this means a
-                                 * child top level will be focused
-                                 */
-                                focus->event != display.root) ||
-                            /* the focus might have reverted with `FOCUS_PARENT`
-                             * or other edge cases that were not considered...
-                             */
-                            focus->detail == XCB_NOTIFY_DETAIL_INFERIOR ||
-                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR ||
-                            /* the window with the pointer on it was focused
-                             * because the focused window lost focus
-                             */
-                            focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
-                        /* the truest "focus changed from A to B" event */
-                        LOG("focus changed to %#" PRIx32 "\n", focus->event);
-                        struct window *window = get_internal_window(focus->event);
-                        if (window != NULL) {
-                            /* if the outer window is focused, focus the inner window */
-                            if (window->outer_id == focus->event && window->outer_id != window->id) {
-                                focus_window(window);
-                            } else {
-                                update_window_focus(window);
-                                if (display.focus != display.root) {
-                                    /* redraw the old window frame */
-                                    redraw_window(display.root);
-                                }
-                                display.focus = focus->event;
-                                redraw_window(focus->event);
-                                report_focus_change_to_workspaces(window);
-                            }
-                        } else {
-                            display.focus = display.root;
-                        }
-                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
+                    struct window *const window = get_internal_window(focus->event);
+
+                    /* if None or PointerRoot received focus, focus any
+                     * available window */
+                    if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
-                        /* TODO: the root or None got focused, delegate the
-                         * focus to a different window
-                         */
+                        /* confirm that this happens on our screen */
+                        if (focus->event == display.root) {
+                            focus_next_available_window();
+                        }
+                    /* The focus moved down the tree, so it either moved from
+                     * our frame/root or from the root to our frame but it
+                     * cannot be the root.  This also includes NotifyPointer
+                     * because the handling here works right for this special
+                     * case which must be triggered with external help. */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_POINTER ||
+                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR) {
+                        if (window == NULL || window->id == focus->event) {
+                            update_window_focus(window);
+                        } else {
+                            focus_window(window);
+                        }
+                    /* the focus moved up the tree, so it either moved to the
+                     * root or our frame window
+                     */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_INFERIOR) {
+                        if (focus->event == display.root) {
+                            update_window_focus(NULL);
+                        } else if (window->outer_id == focus->event && window->id != window->outer_id) {
+                            /* move the focus right back to the inner window */
+                            focus_window(window);
+                        }
+                    /* the root was a common ancestor or the focus itself and
+                     * this gets to our frame or a child of the window within
+                     * the frame got focused */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
+                                focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL) {
+                        /* if the outer frame got focused, this means we will
+                         * soon get the same event but for the inner window, so
+                         * just check of this case (same for root) */
+                        if (window != NULL && window->id == focus->event) {
+                            update_window_focus(window);
+                        }
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR) {
+                        update_window_focus(window);
                     }
                 }
                 break;

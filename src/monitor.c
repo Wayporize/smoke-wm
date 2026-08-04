@@ -201,7 +201,7 @@ static struct workspace *create_workspace(struct monitor *monitor, const utf8_t 
 }
 
 /* Get the currently active workspace. */
-static struct workspace *get_active_workspace(void)
+struct workspace *get_active_workspace(void)
 {
     for (size_t i = 0; i < workspaces_length; i++) {
         if (workspaces[i]->state == WORKSPACE_ACTIVE) {
