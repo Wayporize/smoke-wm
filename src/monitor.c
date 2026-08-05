@@ -191,7 +191,7 @@ static struct workspace *create_workspace(struct monitor *monitor, const utf8_t 
     /* if this is the first workspace to exist, make it active */
     if (workspaces_length == 1) {
         workspace->state = WORKSPACE_ACTIVE;
-    } else {
+    } else if (monitor->workspaces_length == 1) {
         workspace->state = WORKSPACE_VISIBLE;
     }
 
@@ -212,7 +212,7 @@ struct workspace *get_active_workspace(void)
     return create_workspace(NULL, NULL);
 }
 
-/* Dump the monitor setup to stdout. */
+/* Dump the monitor setup to `stdout`. */
 static void dump_monitor_setup(void)
 {
     printf("primary %" PRIu32 "\n", primary);

@@ -74,11 +74,20 @@ void focus_next_available_window(void);
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 
+/* Update the focus number of @window to be the most recent. */
+void update_window_focus_number(struct window *window);
+
 /* Update the internal window focus to a new window.
  *
  * @window may be `NULL` in which case the root is the new focus.
  */
 void update_window_focus(struct window *window);
+
+/* Try to focus a window that makes sense or the root if none available. */
+void focus_next_available_window(void);
+
+/* Handle when a client wants to map (show) a window. */
+void handle_map_request(xcb_map_request_event_t *event);
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
 void handle_configure_request(xcb_configure_request_event_t *event);

@@ -17,6 +17,11 @@ STATIC_LIST(struct window*, windows);
 /* Get the internal representation of an X window. */
 struct window *get_internal_window(xcb_window_t id)
 {
+    /* shortcut for a common parameter */
+    if (id == display.root) {
+        return NULL;
+    }
+
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i]->id == id || windows[i]->outer_id == id) {
             return windows[i];
@@ -279,6 +284,11 @@ void manage_new_window(struct window *window, struct wm_window *configuration)
     /* get the window configuration */
     get_window_configuration(window, configuration);
 
+    /* remove any X borders from the window */
+    const uint16_t configure_mask = XCB_CONFIG_WINDOW_BORDER_WIDTH;
+    const uint32_t configure_values[] = { 0 };
+    xcb_configure_window(display.xcb, window->id, configure_mask, configure_values);
+
     /* get some sensible initial floating size */
     set_initial_size(window);
 
@@ -331,6 +341,9 @@ void handle_map_request(xcb_map_request_event_t *event)
     struct workspace *const workspace = get_window_workspace(window);
     if (workspace != NULL && workspace->state == WORKSPACE_HIDDEN) {
         window->state = XCB_ICCCM_WM_STATE_ICONIC;
+        /* make sure that when the user switches to this workspace, this new
+         * window is immediately focused */
+        update_window_focus_number(window);
     }
 
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
@@ -347,34 +360,37 @@ void handle_map_request(xcb_map_request_event_t *event)
 }
 
 /* Update the focus number of @window to be the most recent. */
-void update_window_focus(struct window *window)
+void update_window_focus_number(struct window *window)
 {
     uint64_t maximum_focus = 0;
+    for (size_t i = 0; i < windows_length; i++) {
+        if (windows[i] == window) {
+            continue;
+        }
+        if (maximum_focus < windows[i]->focus_order) {
+            maximum_focus = windows[i]->focus_order;
+        }
+    }
+    /* make sure the window has the biggest focus of all */
+    window->focus_order = maximum_focus + 1;
+}
 
+/* Update the internal window focus to a new window. */
+void update_window_focus(struct window *window)
+{
+    /* switch the focus and redraw the border of the old focus window */
     const xcb_window_t old_focus = display.focus;
-
     if (window == NULL) {
         display.focus = display.root;
     } else {
         display.focus = window->id;
     }
-
     redraw_window(old_focus);
 
     if (window == NULL) {
         LOG("focus changed to %#" PRIx32 " (root)\n", display.focus);
     } else {
-        for (size_t i = 0; i < windows_length; i++) {
-            if (windows[i] == window) {
-                continue;
-            }
-            if (maximum_focus < windows[i]->focus_order) {
-                maximum_focus = windows[i]->focus_order;
-            }
-        }
-
-        /* make sure the window has the biggest focus of all */
-        window->focus_order = maximum_focus + 1;
+        update_window_focus_number(window);
 
         redraw_window(window->id);
         report_focus_change_to_workspaces(window);
@@ -444,7 +460,11 @@ void focus_next_available_window(void)
 void configure_window(xcb_configure_notify_event_t *event)
 {
     struct window *const window = get_internal_window(event->window);
-    /* only consider configure events for outer windows */
+    /* Only consider configure events for outer windows.
+     * There was an attempt to also consider when the inner window resizes and
+     * adjust the outer window.  However, this lead to displacement and side
+     * effects.  That could have been fixed by storing more information in the
+     * window structure but it is not worth it. */
     if (window == NULL || window->outer_id != event->window) {
         return;
     }
