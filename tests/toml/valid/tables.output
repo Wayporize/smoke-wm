@@ -31,10 +31,10 @@ border.color.tiling.red = 0xffff
 border.color.tiling.green = 0x0000
 border.color.tiling.blue = 0x0000
 border.color.tiling.alpha = 0xffff
-[[MONITOR]]
+[[OUTPUT]]
 name = (null)
 layout = unspecified
-[[MONITOR]]
+[[OUTPUT]]
 name = (null)
 layout = unspecified
 [[WINDOW]]
@@ -42,33 +42,33 @@ name = (null)
 class = (null)
 instance = (null)
 workspace = (null)
-monitor = (null)
-hidden = 0
+output = (null)
+hidden = -1
 mode = unspecified
-border.size = 2
-border.decoration = full
-border.radius.inner = 7
-border.radius.outer = 8
-border.color.focused.red = 0xffff
+border.size = -1
+border.decoration = unspecified
+border.radius.inner = -1
+border.radius.outer = -1
+border.color.focused.red = 0x0000
 border.color.focused.green = 0x0000
 border.color.focused.blue = 0x0000
-border.color.focused.alpha = 0xffff
+border.color.focused.alpha = 0x0000
 border.color.highlight.red = 0x0000
-border.color.highlight.green = 0xffff
+border.color.highlight.green = 0x0000
 border.color.highlight.blue = 0x0000
-border.color.highlight.alpha = 0xffff
+border.color.highlight.alpha = 0x0000
 border.color.inactive.red = 0x0000
 border.color.inactive.green = 0x0000
-border.color.inactive.blue = 0xffff
-border.color.inactive.alpha = 0xffff
-border.color.floating.red = 0xffff
+border.color.inactive.blue = 0x0000
+border.color.inactive.alpha = 0x0000
+border.color.floating.red = 0x0000
 border.color.floating.green = 0x0000
 border.color.floating.blue = 0x0000
-border.color.floating.alpha = 0xffff
-border.color.tiling.red = 0xffff
+border.color.floating.alpha = 0x0000
+border.color.tiling.red = 0x0000
 border.color.tiling.green = 0x0000
 border.color.tiling.blue = 0x0000
-border.color.tiling.alpha = 0xffff
+border.color.tiling.alpha = 0x0000
 [[BINDING]]
 release = 0
 transparent = 0

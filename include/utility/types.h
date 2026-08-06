@@ -13,49 +13,49 @@
 typedef char utf8_t;
 
 /* a point at position x, y */
-typedef struct position {
+struct position {
     /* horizontal position */
-    int x;
+    int32_t x;
     /* vertical position */
-    int y;
-} Point;
+    int32_t y;
+};
 
 /* a size of width x height */
-typedef struct size {
+struct size {
     /* horizontal size */
-    unsigned int width;
+    int32_t width;
     /* vertical size */
-    unsigned int height;
-} Size;
+    int32_t height;
+};
 
 /* offsets from the edges of *something* */
-typedef struct extents {
+struct extents {
     /* left extent */
-    int left;
+    int32_t left;
     /* right extent */
-    int right;
+    int32_t right;
     /* top extent */
-    int top;
+    int32_t top;
     /* bottom extent */
-    int bottom;
-} Extents;
+    int32_t bottom;
+};
 
 /* a rectangular region */
-typedef struct rectangle {
+struct rectangle {
     /* horizontal position */
-    int x;
+    int32_t x;
     /* vertical position */
-    int y;
+    int32_t y;
     /* horizontal size */
-    unsigned int width;
+    int32_t width;
     /* vertical size */
-    unsigned int height;
-} Rectangle;
+    int32_t height;
+};
 
 /* fraction: numerator over denominator */
-typedef struct ratio {
-    unsigned int numerator;
-    unsigned int denominator;
-} Ratio;
+struct ratio {
+    int32_t numerator;
+    int32_t denominator;
+};
 
 #endif

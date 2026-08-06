@@ -21,6 +21,7 @@
 #define ABORT(...) do { \
     fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
     fprintf(stderr, __VA_ARGS__); \
+    fputc('\n', stderr); \
     abort(); \
 } while (0)
 

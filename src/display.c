@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <utility/log.h>
 
-#include <xcb/randr.h>
 #include <xcb/xcb_errors.h>
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon.h>
@@ -27,7 +26,7 @@ static void initialize_randr(xcb_randr_get_screen_resources_cookie_t cookie)
 
     extension_reply = xcb_get_extension_data(display.xcb, &xcb_randr_id);
     ASSERT(extension_reply != NULL,
-            "failed to query xcb extension data for RandR\n");
+            "failed to query xcb extension data for RandR");
     ASSERT(extension_reply->present, "the server does not support RandR");
 
     display.randr_base_event = extension_reply->first_event;
@@ -52,12 +51,12 @@ static void refresh_keyboard_mapping(void)
 
     display.keymap = xkb_x11_keymap_new_from_device(display.xkb, display.xcb,
             display.keyboard_device_id, 0);
-    ASSERT(display.keymap != NULL, "could not create xkb keymap\n");
+    ASSERT(display.keymap != NULL, "could not create xkb keymap");
 
     display.keyboard_state = xkb_x11_state_new_from_device(display.keymap,
             display.xcb, display.keyboard_device_id);
     ASSERT(display.keyboard_state != NULL,
-            "could not create xkb keyboard state\n");
+            "could not create xkb keyboard state");
 }
 
 /* Initialize the Xkb extension and xkbcommon library. */
@@ -91,27 +90,27 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
 
     extension_reply = xcb_get_extension_data(display.xcb, &xcb_xkb_id);
     ASSERT(extension_reply != NULL,
-            "failed to query xcb extension data for xkb\n");
+            "failed to query xcb extension data for xkb");
     ASSERT(extension_reply->present,
-            "xkb is not available on the server\n");
+            "xkb is not available on the server");
 
     display.xkb_base_event = extension_reply->first_event;
     display.xkb_base_error = extension_reply->first_error;
 
     reply = xcb_xkb_use_extension_reply(display.xcb, cookie, &error);
-    ASSERT(reply != NULL, "using xcb extension xkb failed: error code %d\n",
+    ASSERT(reply != NULL, "using xcb extension xkb failed: error code %d",
             error->error_code);
-    ASSERT(reply->supported, "server does not support xkb version %d.%d\n",
+    ASSERT(reply->supported, "server does not support xkb version %d.%d",
                 XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
     free(reply);
 
     display.xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    ASSERT(display.xkb != NULL, "could not create xkb context\n");
+    ASSERT(display.xkb != NULL, "could not create xkb context");
 
     /* get the device id of the core keyboard */
     device_reply = xcb_xkb_get_device_info_reply(display.xcb, device_cookie,
             NULL);
-    ASSERT(device_reply != NULL, "could not get xkb device info\n");
+    ASSERT(device_reply != NULL, "could not get xkb device info");
     display.keyboard_device_id = device_reply->deviceID;
     free(device_reply);
 
@@ -140,9 +139,9 @@ static void initialize_xkb(xcb_xkb_use_extension_cookie_t cookie,
 
     client_reply = xcb_xkb_per_client_flags_reply(display.xcb, client_cookie,
             &error);
-    ASSERT(client_reply != NULL, "could not set xkb per client flags\n");
+    ASSERT(client_reply != NULL, "could not set xkb per client flags");
     ASSERT((client_reply->value & XCB_XKB_PER_CLIENT_FLAG_DETECTABLE_AUTO_REPEAT),
-            "could not set per client flags (X server can not comply)\n");
+            "could not set per client flags (X server can not comply)");
     free(client_reply);
 
     /* do an initial refresh */
@@ -180,6 +179,8 @@ void open_display(void)
     const xcb_setup_t *setup;
     xcb_screen_iterator_t iterator;
 
+    xcb_intern_atom_cookie_t *ewmh_cookies;
+
     xcb_randr_get_screen_resources_cookie_t randr_cookie;
 
     xcb_xkb_use_extension_cookie_t xkb_cookie;
@@ -197,12 +198,17 @@ void open_display(void)
 
         { .name = "WM_PROTOCOLS", .target = &display.wm_protocols },
         { .name = "WM_TAKE_FOCUS", .target = &display.wm_take_focus },
+
+        { .name = "WM_STATE", .target = &display.wm_state },
     };
 
     /* connect to the X server */
-    display.xcb = xcb_connect(NULL, &screen_index);
+    display.xlib = XOpenDisplay(NULL);
+    XSetEventQueueOwner(display.xlib, XCBOwnsEventQueue);
+    screen_index = XDefaultScreen(display.xlib);
+    display.xcb = XGetXCBConnection(display.xlib);
     connection_error = xcb_connection_has_error(display.xcb);
-    ASSERT(connection_error == 0, "%s\n",
+    ASSERT(connection_error == 0, "%s",
             get_connection_error_string(connection_error));
 
     display.screen_index = screen_index;
@@ -215,6 +221,8 @@ void open_display(void)
             break;
         }
     }
+
+    ALLOCATE_ZERO(display.ewmh, 1);
 
     /* prefetch extensions */
     xcb_prefetch_extension_data(display.xcb, &xcb_randr_id);
@@ -229,6 +237,7 @@ void open_display(void)
         intern_atoms[i].cookie = xcb_intern_atom(display.xcb, false,
             strlen(intern_atoms[i].name), intern_atoms[i].name);
     }
+    ewmh_cookies = xcb_ewmh_init_atoms(display.xcb, display.ewmh);
 
     randr_cookie = xcb_randr_get_screen_resources(display.xcb, display.root);
 
@@ -251,10 +260,11 @@ void open_display(void)
         xcb_intern_atom_reply_t *atom_reply;
 
         atom_reply = xcb_intern_atom_reply(display.xcb, intern_atoms[i].cookie, NULL);
-        ASSERT(atom_reply != NULL, "could not intern %s atom\n", intern_atoms[i].name);
+        ASSERT(atom_reply != NULL, "could not intern %s atom", intern_atoms[i].name);
         *(intern_atoms[i].target) = atom_reply->atom;
         free(atom_reply);
     }
+    ASSERT(xcb_ewmh_init_atoms_replies(display.ewmh, ewmh_cookies, NULL), "could not initialize ewmh atoms");
 
     initialize_randr(randr_cookie);
     initialize_xkb(xkb_cookie, xkb_device_cookie, xkb_client_cookie);
@@ -372,6 +382,9 @@ static int handle_extension_event(xcb_generic_event_t *event)
         } else if (event->response_type == display.xkb_base_event) {
             handle_xkb_event(event);
             status = 0;
+        } else if (event->response_type == display.randr_base_event) {
+            /* ignore */
+            status = 0;
         /* add `XCB_RANDR_NOTIFY` which is the newer RandR event system */
         } else if (event->response_type == display.randr_base_event + XCB_RANDR_NOTIFY) {
             handle_randr_event(event);
@@ -380,7 +393,7 @@ static int handle_extension_event(xcb_generic_event_t *event)
     }
 
     error = xcb_connection_has_error(display.xcb);
-    ASSERT(error == 0, "xcb connection error: %s\n",
+    ASSERT(error == 0, "xcb connection error: %s",
             get_connection_error_string(error));
 
     return status;
@@ -433,7 +446,7 @@ static xcb_window_t get_selection_owner(xcb_atom_t atom)
     owner_cookie = xcb_get_selection_owner(display.xcb, atom);
     owner_reply = xcb_get_selection_owner_reply(display.xcb, owner_cookie,
             NULL);
-    ASSERT(owner_reply != NULL, "could not get selection owner\n");
+    ASSERT(owner_reply != NULL, "could not get selection owner");
 
     owner = owner_reply->owner;
     free(owner_reply);
@@ -602,7 +615,7 @@ enum wm_ownership_status take_wm_ownership(void)
         if (error != NULL) {
             /* if this is not an access error, our connection must be broken */
             ASSERT(error->error_code == XCB_ACCESS,
-                    "Could not change window attributes on the root window\n");
+                    "Could not change window attributes on the root window");
             free(error);
 
             owner = get_selection_owner(display.wm_sn_atom);
@@ -621,6 +634,9 @@ enum wm_ownership_status take_wm_ownership(void)
         } else {
             /* associated to a few manager tests */
             notef("taking over\n");
+            /* TODO: get current focus */
+            /* TODO: initialize workspaces */
+            /* TODO: query existing windows */
         }
     }
 
@@ -649,6 +665,8 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
 
     /* associated to a few manager tests */
     notef("going dormant\n");
+
+    /* TODO: also make the entire window/workspace module go dormant */
 
     /* listen for destroy notifications on the current owner */
     owner = change_selection_owner_event_mask_to_destruction(owner,
@@ -689,9 +707,7 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             event->selection == display.wm_sn_atom) {
         /* property change events are needed to get the server timestamp */
         const uint32_t root_mask = XCB_CW_EVENT_MASK;
-        const uint32_t root_attributes[] = {
-            XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
-        };
+        const uint32_t root_attributes[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
         xcb_change_window_attributes(display.xcb, display.root,
                 root_mask, root_attributes);
 
@@ -711,6 +727,40 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
                 sleep(1);
             }
         } while (status != WM_OWNERSHIP_SUCCESS);
+    }
+}
+
+/* Handle an incoming client message. */
+void handle_client_message(xcb_client_message_event_t *event)
+{
+    if (event->format == 32 && event->type == display.ewmh->_NET_MOVERESIZE_WINDOW) {
+        uint16_t mask = 0;
+        uint32_t values[4];
+        uint32_t index = 0;
+
+        const uint32_t flags = event->data.data32[0];
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_X)) {
+            mask |= XCB_CONFIG_WINDOW_X;
+            values[index] = event->data.data32[1];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_Y)) {
+            mask |= XCB_CONFIG_WINDOW_Y;
+            values[index] = event->data.data32[2];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_WIDTH)) {
+            mask |= XCB_CONFIG_WINDOW_WIDTH;
+            values[index] = event->data.data32[3];
+            index++;
+        }
+        if ((flags & XCB_EWMH_MOVERESIZE_WINDOW_HEIGHT)) {
+            mask |= XCB_CONFIG_WINDOW_HEIGHT;
+            values[index] = event->data.data32[4];
+            index++;
+        }
+        /* TODO: consider gravity */
+        xcb_configure_window(display.xcb, event->window, mask, values);
     }
 }
 
@@ -747,6 +797,10 @@ void handle_server_events(void)
                 handle_configure_request((xcb_configure_request_event_t*) event);
                 break;
 
+            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+                configure_window((xcb_configure_notify_event_t*) event);
+                break;
+
             case XCB_MAP_REQUEST: /* a window wants to be shown on screen */
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
@@ -780,7 +834,12 @@ void handle_server_events(void)
                              */
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
                         /* the truest "focus changed from A to B" event */
-                        report_focus_change(focus->event);
+                        notef("focus changed to %#" PRIx32 "\n", focus->event);
+                        display.focus = focus->event;
+                        struct window *const window = get_internal_window(focus->event);
+                        if (window != NULL) {
+                            report_focus_change_to_workspaces(window);
+                        }
                     } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
                         /* TODO: the root or None got focused, delegate the
@@ -795,9 +854,19 @@ void handle_server_events(void)
                 destroy_window((xcb_destroy_notify_event_t*) event);
                 break;
 
-            case XCB_MAP_NOTIFY: /* a window was shown */
+            /* most or all client message are sent through `xcb_send_event()`,
+             * it means that a client wants to tell us something
+             */
+            case (0x80 | XCB_CLIENT_MESSAGE):
+            case XCB_CLIENT_MESSAGE:
+                handle_client_message((xcb_client_message_event_t*) event);
+                break;
+
             case XCB_UNMAP_NOTIFY: /* a window was hidden */
-            case XCB_CONFIGURE_NOTIFY: /* a window was configured */
+                /* TODO: react to this by setting the window state,
+                 * also react to the synthetic event which carries extra meaning
+                 */
+            case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;

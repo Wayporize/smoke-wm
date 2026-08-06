@@ -1,5 +1,5 @@
-#ifndef ATTRIBUTE_H
-#define ATTRIBUTE_H
+#ifndef ATTRIBUTES_H
+#define ATTRIBUTES_H
 
 /* If the compiler does not have __has_attribute, always make it false. */
 #ifndef __has_attribute

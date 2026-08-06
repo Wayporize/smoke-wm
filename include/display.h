@@ -1,17 +1,25 @@
 #ifndef X11_H
 #define X11_H
 
-#include <xcb/xcb.h>
+#include <X11/Xlib-xcb.h>
+#include <xcb/xcb_ewmh.h>
 #include <xkbcommon/xkbcommon.h>
 
 struct display {
     /* connection to the X server */
+    Display *xlib;
+    /* connection to the X server (but xcb) */
     xcb_connection_t *xcb;
     /* currently active screen */
     xcb_screen_t *screen;
     unsigned screen_index;
     /* root window on the active screen */
     xcb_window_t root;
+    /* ewmh library access */
+    xcb_ewmh_connection_t *ewmh;
+
+    /* the currently focused window, focus changes while a window is grabbed */
+    xcb_window_t focus;
 
     /* last server timestamp usable for `WM_TAKE_FOCUS` client messages and
      * `SetInputFocus` requests
@@ -22,8 +30,10 @@ struct display {
     xcb_atom_t wm_sn_atom;
     /* the `MANAGER` atom */
     xcb_atom_t manager_atom;
-    /* the window used for WM_Sn selection management */
+    /* the window used for `WM_Sn` selection management */
     xcb_window_t wm_sn_window;
+    /* the `WM_STATE` atom we set on windows */
+    xcb_atom_t wm_state;
 
     /* base event for randr events */
     uint8_t randr_base_event, randr_base_error;

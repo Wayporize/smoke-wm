@@ -39,7 +39,7 @@ struct wm Configuration_default = {
 
 /* Print the given color as four lines to stdout and prefix each with @prefix.
  */
-static void print_color(const char *prefix, xcb_render_color_t *color)
+static void print_color(const char *prefix, struct wm_color *color)
 {
     printf("%s.red = 0x%04x\n", prefix, color->red);
     printf("%s.green = 0x%04x\n", prefix, color->green);
@@ -98,17 +98,16 @@ void dump_configuration(struct wm *wm)
 
     print_border(&wm->border);
 
-    for (size_t i = 0; i < wm->monitor_length; i++) {
-        printf("[[MONITOR]]\n");
-        printf("name = %s\n", wm->monitor[i].name);
-        print_layout(wm->monitor[i].layout);
+    for (size_t i = 0; i < wm->output_length; i++) {
+        printf("[[OUTPUT]]\n");
+        printf("name = %s\n", wm->output[i].name);
+        print_layout(wm->output[i].layout);
     }
 
     for (size_t i = 0; i < wm->workspace_length; i++) {
         printf("[[WORKSPACE]]\n");
         printf("name = %s\n", wm->workspace[i].name);
-        printf("number = %u\n", wm->workspace[i].number);
-        printf("monitor = %s\n", wm->workspace[i].monitor);
+        printf("output = %s\n", wm->workspace[i].output);
         print_layout(wm->workspace[i].layout);
     }
 
@@ -118,7 +117,7 @@ void dump_configuration(struct wm *wm)
         printf("class = %s\n", wm->window[i].class);
         printf("instance = %s\n", wm->window[i].instance);
         printf("workspace = %s\n", wm->window[i].workspace);
-        printf("monitor = %s\n", wm->window[i].monitor);
+        printf("output = %s\n", wm->window[i].output);
         printf("hidden = %d\n", wm->window[i].hidden);
         printf("mode = ");
         switch (wm->window[i].mode) {
@@ -151,14 +150,14 @@ void dump_configuration(struct wm *wm)
 /* Clear a configuration object. */
 void clear_configuration(struct wm *wm)
 {
-    for (size_t i = 0; i < wm->monitor_length; i++) {
-        free(wm->monitor[i].name);
+    for (size_t i = 0; i < wm->output_length; i++) {
+        free(wm->output[i].name);
     }
-    free(wm->monitor);
+    free(wm->output);
 
     for (size_t i = 0; i < wm->workspace_length; i++) {
         free(wm->workspace[i].name);
-        free(wm->workspace[i].monitor);
+        free(wm->workspace[i].output);
     }
     free(wm->workspace);
 
@@ -167,7 +166,7 @@ void clear_configuration(struct wm *wm)
         free(wm->window[i].class);
         free(wm->window[i].instance);
         free(wm->window[i].workspace);
-        free(wm->window[i].monitor);
+        free(wm->window[i].output);
     }
     free(wm->window);
 
@@ -284,4 +283,66 @@ char *get_configuration_path(void)
     free(path);
 
     return NULL;
+}
+
+/* Get the configuration entry associated to given window. */
+bool get_window_configuration(const struct window *window, struct wm_window *configuration)
+{
+    bool has_entry = false;
+
+    /* start with the base configuration */
+    ZERO(configuration, 1);
+    configuration->border = Configuration.border;
+
+    /* merge matching configuration entries into the current configuration */
+    for (size_t i = 0; i < Configuration.window_length; i++) {
+        struct wm_window *const entry = &Configuration.window[i];
+        if ((entry->name == NULL || matches_pattern(entry->name, window->name)) &&
+                (entry->class == NULL || matches_pattern(entry->class, window->class)) &&
+                (entry->instance == NULL || matches_pattern(entry->instance, window->instance))) {
+            has_entry = true;
+            if (entry->workspace != NULL) {
+                configuration->workspace = entry->workspace;
+            }
+            if (entry->output != NULL) {
+                configuration->output = entry->output;
+            }
+            if (entry->hidden != -1) {
+                configuration->hidden = entry->hidden;
+            }
+            if (entry->mode != WINDOW_UNSPECIFIED) {
+                configuration->mode = entry->mode;
+            }
+
+            struct wm_border *const border = &entry->border;
+            if (border->size != -1) {
+                configuration->border.size = border->size;
+            }
+            if (border->decoration != BORDER_UNSPECIFIED) {
+                configuration->border.decoration = border->decoration;
+            }
+            if (border->radius.inner != -1) {
+                configuration->border.radius.inner = border->radius.inner;
+            }
+            if (border->radius.outer != -1) {
+                configuration->border.radius.outer = border->radius.outer;
+            }
+            if (border->color.focused.is_set) {
+                configuration->border.color.focused = border->color.focused;
+            }
+            if (border->color.highlight.is_set) {
+                configuration->border.color.highlight = border->color.highlight;
+            }
+            if (border->color.inactive.is_set) {
+                configuration->border.color.inactive = border->color.inactive;
+            }
+            if (border->color.tiling.is_set) {
+                configuration->border.color.tiling = border->color.tiling;
+            }
+            if (border->color.floating.is_set) {
+                configuration->border.color.floating = border->color.floating;
+            }
+        }
+    }
+    return has_entry;
 }

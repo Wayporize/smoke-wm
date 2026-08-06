@@ -141,6 +141,21 @@
     name##_length++; \
 } while (0)
 
+/* Remove a range from a list.
+ *
+ * T*     @name is the name of the list.
+ * size_t @index is the start.
+ * size_t @amount is the amount to remove.
+ *
+ * void @return
+ */
+#define LIST_REMOVE(name, index, amount) do { \
+    const size_t _index = (index); \
+    const size_t _amount = (amount); \
+    name##_length -= _amount; \
+    MOVE(&name[_index], &name[_index + _amount], name##_length - _index); \
+} while (0)
+
 /* Copy elements from a list.
  *
  * T*     @name is the name of the list.

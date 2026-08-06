@@ -10,7 +10,7 @@
 
 [wm.border.color]
 
-[[wm.monitor]]
+[[wm.output]]
 
 [[wm.window]]
 
@@ -28,7 +28,7 @@
 
 [wm.   border.color]
 
-[[wm."mon\x69tor"]]
+[[wm."\x6futput"]]
 
 [wm . bindings]
 

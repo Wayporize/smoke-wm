@@ -14,7 +14,7 @@
 #include "toml.h"
 
 /* append functions for table arrays */
-static void append_wm_monitor(struct toml_parse_context *context);
+static void append_wm_output(struct toml_parse_context *context);
 static void append_wm_workspace(struct toml_parse_context *context);
 static void append_wm_window(struct toml_parse_context *context);
 static void append_wm_binding(struct toml_parse_context *context);
@@ -40,17 +40,16 @@ static void parse_wm_border_size(struct toml_parse_context *context);
 static void parse_wm_border_decoration(struct toml_parse_context *context);
 static void parse_wm_border_radius(struct toml_parse_context *context);
 static void parse_wm_border_color(struct toml_parse_context *context);
-static void parse_wm_monitor_name(struct toml_parse_context *context);
-static void parse_wm_monitor_layout(struct toml_parse_context *context);
+static void parse_wm_output_name(struct toml_parse_context *context);
+static void parse_wm_output_layout(struct toml_parse_context *context);
 static void parse_wm_workspace_name(struct toml_parse_context *context);
-static void parse_wm_workspace_number(struct toml_parse_context *context);
-static void parse_wm_workspace_monitor(struct toml_parse_context *context);
+static void parse_wm_workspace_output(struct toml_parse_context *context);
 static void parse_wm_workspace_layout(struct toml_parse_context *context);
 static void parse_wm_window_name(struct toml_parse_context *context);
 static void parse_wm_window_class(struct toml_parse_context *context);
 static void parse_wm_window_instance(struct toml_parse_context *context);
 static void parse_wm_window_workspace(struct toml_parse_context *context);
-static void parse_wm_window_monitor(struct toml_parse_context *context);
+static void parse_wm_window_output(struct toml_parse_context *context);
 static void parse_wm_window_hidden(struct toml_parse_context *context);
 static void parse_wm_window_mode(struct toml_parse_context *context);
 static void parse_wm_window_border_size(struct toml_parse_context *context);
@@ -103,13 +102,12 @@ static const struct {
                 { 4, "inactive", parse_wm_border_color, NULL },
                 { 4, "floating", parse_wm_border_color, NULL },
                 { 4, "tiling", parse_wm_border_color, NULL },
-        { 2, "monitor", NULL, append_wm_monitor },
-            { 3, "name", parse_wm_monitor_name, NULL },
-            { 3, "layout", parse_wm_monitor_layout, NULL },
+        { 2, "output", NULL, append_wm_output },
+            { 3, "name", parse_wm_output_name, NULL },
+            { 3, "layout", parse_wm_output_layout, NULL },
         { 2, "workspace", NULL, append_wm_workspace },
             { 3, "name", parse_wm_workspace_name, NULL },
-            { 3, "number", parse_wm_workspace_number, NULL },
-            { 3, "monitor", parse_wm_workspace_monitor, NULL },
+            { 3, "output", parse_wm_workspace_output, NULL },
             { 3, "layout", parse_wm_workspace_layout, NULL },
         { 2, "window", NULL, append_wm_window },
             { 3, "name", parse_wm_window_name, NULL },
@@ -117,7 +115,7 @@ static const struct {
             { 3, "class", parse_wm_window_class, NULL },
             { 3, "instance", parse_wm_window_instance, NULL },
             { 3, "workspace", parse_wm_window_workspace, NULL },
-            { 3, "monitor", parse_wm_window_monitor, NULL },
+            { 3, "output", parse_wm_window_output, NULL },
             { 3, "hidden", parse_wm_window_hidden, NULL },
             { 3, "mode", parse_wm_window_mode, NULL },
             { 3, "border", NULL, NULL },
@@ -185,10 +183,10 @@ static unsigned get_sub_table(struct toml_parse_context *context,
     return index;
 }
 
-static void append_wm_monitor(struct toml_parse_context *context)
+static void append_wm_output(struct toml_parse_context *context)
 {
-    LIST_APPEND(context->wm.monitor, NULL, 1);
-    ZERO(&context->wm.monitor[context->wm.monitor_length - 1], 1);
+    LIST_APPEND(context->wm.output, NULL, 1);
+    ZERO(&context->wm.output[context->wm.output_length - 1], 1);
 }
 
 static void append_wm_workspace(struct toml_parse_context *context)
@@ -204,9 +202,8 @@ static void append_wm_window(struct toml_parse_context *context)
     LIST_APPEND(context->wm.window, NULL, 1);
     window = &context->wm.window[context->wm.window_length - 1];
     ZERO(window, 1);
-    /* set markers for "unset", they will be resolved after the parsing
-     * completed
-     */
+    /* set markers for "unset" */
+    window->hidden = -1;
     window->border.size = -1;
     window->border.radius.inner = -1;
     window->border.radius.outer = -1;
@@ -276,18 +273,26 @@ static void parse_border_radius(
 static void parse_border_color(struct toml_parse_context *context,
         struct wm_border *border)
 {
-    xcb_render_color_t *pointer;
+    struct wm_color *pointer;
+    XColor color;
 
-    switch (context->string[1]) {
-    case 'o': pointer = &border->color.focused; break;
-    case 'c': pointer = &border->color.highlight; break;
-    case 'n': pointer = &border->color.inactive; break;
-    case 'l': pointer = &border->color.floating; break;
-    case 'i': pointer = &border->color.tiling; break;
-        break;
+    switch (context->string[2]) {
+    case 'c': pointer = &border->color.focused; break;
+    case 'g': pointer = &border->color.highlight; break;
+    case 'a': pointer = &border->color.inactive; break;
+    case 'o': pointer = &border->color.floating; break;
+    case 'l': pointer = &border->color.tiling; break;
+    default: ABORT("consistency error: default branch should not have been triggered");
     }
     read_any_string(context);
-    /* TODO: parse color */
+    if (!XParseColor(display.xlib, XDefaultColormap(display.xlib, XDefaultScreen(display.xlib)), context->string, &color)) {
+        emit_error(context, "could not parse color");
+    }
+    pointer->is_set = true;
+    pointer->alpha = 0xffff;
+    pointer->red = color.red;
+    pointer->green = color.green;
+    pointer->blue = color.blue;
 }
 
 static void parse_layout(struct toml_parse_context *context,
@@ -322,7 +327,7 @@ static void parse_layout(struct toml_parse_context *context,
 
     if (strcmp(layouts[layout], context->string) != 0) {
         emit_error(context, "invalid layout constant, choose one of:\n"
-                "auto (choose a sensible layout for the monitor dimensions),\n"
+                "auto (choose a sensible layout for the output dimensions),\n"
                 "stack (stack windows on top of each other),\n"
                 "horizontal (align windows on a horizontal line),\n"
                 "vertical (...vertical line),\n"
@@ -344,10 +349,10 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
 
     enum window_mode mode;
 
-    if (context->string[0] == '\0') {
+    if (string[0] == '\0') {
         mode = 0;
     } else {
-        switch (context->string[1]) {
+        switch (string[1]) {
         case 'n': mode = WINDOW_UNSPECIFIED; break;
         case 'i': mode = WINDOW_TILING; break;
         case 'l': mode = WINDOW_FLOATING; break;
@@ -356,7 +361,7 @@ static enum window_mode resolve_window_mode(struct toml_parse_context *context,
         }
     }
 
-    if (strcmp(modes[mode], context->string) != 0) {
+    if (strcmp(modes[mode], string) != 0) {
         emit_error(context, "invalid mode constant, choose one of: "
                 "tiling, floating, fullscreen");
     }
@@ -465,6 +470,8 @@ static xcb_button_t resolve_button(struct toml_parse_context *context,
 static enum action_type resolve_action(struct toml_parse_context *context,
         const char *string)
 {
+    (void) context;
+    (void) string;
     /* TODO: implement when actions are there */
     return ACTION_NULL;
 }
@@ -475,6 +482,8 @@ static union action_value resolve_action_value(
 {
     union action_value value;
 
+    (void) context;
+    (void) string;
     /* TODO: implement when actions are there */
     value.value = 0;
 
@@ -588,28 +597,28 @@ static void parse_wm_border_color(struct toml_parse_context *context)
     parse_border_color(context, &context->wm.border);
 }
 
-static void parse_wm_monitor_name(struct toml_parse_context *context)
+static void parse_wm_output_name(struct toml_parse_context *context)
 {
-    if (context->wm.monitor_length == 0) {
+    if (context->wm.output_length == 0) {
         emit_error(context,
-                "can not modify 'monitor' if no entry was defined yet");
+                "can not modify 'output' if no entry was defined yet");
     }
 
     read_any_string(context);
-    free(context->wm.monitor[context->wm.monitor_length - 1].name);
-    context->wm.monitor[context->wm.monitor_length - 1].name =
+    free(context->wm.output[context->wm.output_length - 1].name);
+    context->wm.output[context->wm.output_length - 1].name =
         xstrdup(context->string);
 }
 
-static void parse_wm_monitor_layout(struct toml_parse_context *context)
+static void parse_wm_output_layout(struct toml_parse_context *context)
 {
-    if (context->wm.monitor_length == 0) {
+    if (context->wm.output_length == 0) {
         emit_error(context,
-                "can not modify 'monitor' if no entry was defined yet");
+                "can not modify 'output' if no entry was defined yet");
     }
 
     parse_layout(context,
-            &context->wm.monitor[context->wm.monitor_length - 1].layout);
+            &context->wm.output[context->wm.output_length - 1].layout);
 }
 
 static void parse_wm_workspace_name(struct toml_parse_context *context)
@@ -625,20 +634,7 @@ static void parse_wm_workspace_name(struct toml_parse_context *context)
         xstrdup(context->string);
 }
 
-static void parse_wm_workspace_number(struct toml_parse_context *context)
-{
-    if (context->wm.workspace_length == 0) {
-        emit_error(context,
-                "can not modify 'workspace' if no entry was defined yet");
-    }
-
-    read_integer(context);
-    /* TODO: bounds check */
-    context->wm.workspace[context->wm.workspace_length - 1].number =
-        context->number;
-}
-
-static void parse_wm_workspace_monitor(struct toml_parse_context *context)
+static void parse_wm_workspace_output(struct toml_parse_context *context)
 {
     if (context->wm.workspace_length == 0) {
         emit_error(context,
@@ -646,8 +642,8 @@ static void parse_wm_workspace_monitor(struct toml_parse_context *context)
     }
 
     read_any_string(context);
-    free(context->wm.workspace[context->wm.workspace_length - 1].monitor);
-    context->wm.workspace[context->wm.workspace_length - 1].monitor =
+    free(context->wm.workspace[context->wm.workspace_length - 1].output);
+    context->wm.workspace[context->wm.workspace_length - 1].output =
         xstrdup(context->string);
 }
 
@@ -714,7 +710,7 @@ static void parse_wm_window_workspace(struct toml_parse_context *context)
         xstrdup(context->string);
 }
 
-static void parse_wm_window_monitor(struct toml_parse_context *context)
+static void parse_wm_window_output(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
         emit_error(context,
@@ -722,8 +718,8 @@ static void parse_wm_window_monitor(struct toml_parse_context *context)
     }
 
     read_any_string(context);
-    free(context->wm.window[context->wm.window_length - 1].monitor);
-    context->wm.window[context->wm.window_length - 1].monitor =
+    free(context->wm.window[context->wm.window_length - 1].output);
+    context->wm.window[context->wm.window_length - 1].output =
         xstrdup(context->string);
 }
 

@@ -1,27 +1,22 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
+#include <utility/types.h>
+
 #include <xcb/xcb_icccm.h>
-
-#include "workspace.h"
-
-/* property pair */
-struct window_property {
-    /* outgoing request to the server or not outgoing if `sequence` is 0 */
-    xcb_get_property_cookie_t cookie;
-    /* reply received from the request or NULL if no reply received yet */
-    xcb_get_property_reply_t *reply;
-};
 
 /* another state for `xcb_icccm_wm_state_t` to indicate the window is new */
 #define XCB_ICCCM_WM_STATE_NEW ((xcb_icccm_wm_state_t) 4)
 
+struct workspace;
 /* cache for properties and geometry of an X11 window */
-struct window_cache {
+struct window {
     /* the X11 window id */
     xcb_window_t id;
     /* position and size of the window */
     int32_t x, y, width, height;
+    /* the current window state */
+    xcb_icccm_wm_state_t state;
     /* additional hints set by a client */
     xcb_icccm_wm_hints_t hints;
     /* size hints set by a client to properly size the window */
@@ -31,14 +26,15 @@ struct window_cache {
         /* if the `WM_TAKE_FOCUS` client message can be used */
         bool has_wm_take_focus;
     } protocols;
-    /* the current window state */
-    xcb_icccm_wm_state_t state;
-    /* the workspace this window is on */
-    workspace_t workspace;
+    /* window text properties */
+    utf8_t *name, *instance, *class;
 };
 
 /* TODO: Go through all windows that already exist and manage them. */
 void query_existing_windows(void);
+
+/* Get the internal representation of an X window. */
+struct window *get_internal_window(xcb_window_t window);
 
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event);
@@ -56,10 +52,18 @@ void handle_map_request(xcb_map_request_event_t *event);
 /* Handle when a client wants to change the geometry or stacking of a window. */
 void handle_configure_request(xcb_configure_request_event_t *event);
 
-/* Tell the window module the new focused window. */
-void report_focus_change(xcb_window_t window);
+/* Configure the size of a window, this only affects the internal state. */
+void configure_window(xcb_configure_notify_event_t *event);
 
 /* Unregister a window. */
 void destroy_window(xcb_destroy_notify_event_t *event);
+
+struct wm_window;
+/* Notify the window module that the configuration has changed.
+ *
+ * @configured        are the new configuration entries.
+ * @configured_length is the number of new configuration entries.
+ */
+void report_configuration_change_to_windows(struct wm_window *configured, size_t configured_length);
 
 #endif

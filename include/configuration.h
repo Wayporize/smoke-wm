@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#include <xcb/xproto.h>
-#include <xcb/render.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include <utility/list.h>
@@ -29,6 +27,15 @@ enum border_decoration {
     BORDER_FULL
 };
 
+struct wm_color {
+    /* if this actually has a value */
+    bool is_set;
+    /* color transparency, TODO: relevance? */
+    uint16_t alpha;
+    /* red, green and blue components */
+    uint16_t red, green, blue;
+};
+
 /* the globally accessible configuration object */
 extern struct wm {
     /* [wm.tiling] */
@@ -39,58 +46,54 @@ extern struct wm {
         /* [wm.tiling.gaps] */
         struct wm_tiling_gaps {
             /* gaps between tiled windows */
-            int inner[4];
-            /* gaps between tiled windows and the monitor edges */
-            int outer[4];
+            int32_t inner[4];
+            /* gaps between tiled windows and the output edges */
+            int32_t outer[4];
         } gaps;
     } tiling;
 
     /* [wm.border] */
     struct wm_border {
         /* size in pixels of the border */
-        int size;
+        int32_t size;
         /* which decoration type to use by default */
         enum border_decoration decoration;
 
         /* [wm.border.radius] */
         struct wm_border_radius {
             /* the radius within the inside of the window */
-            int inner;
+            int32_t inner;
             /* the radius of the outside of the window */
-            int outer;
+            int32_t outer;
         } radius;
 
         /* [wm.border.color] */
         struct wm_border_color {
-            /* for each color, alpha == 0 indicates that this value is not set
-             */
             /* the color of the border when the window is focused */
-            xcb_render_color_t focused;
+            struct wm_color focused;
             /* the secondary focused color of the border */
-            xcb_render_color_t highlight;
+            struct wm_color highlight;
             /* the color for in active windows (not focused, not highlighted) */
-            xcb_render_color_t inactive;
+            struct wm_color inactive;
             /* focused colors for floating and tiling windows */
-            xcb_render_color_t floating, tiling;
+            struct wm_color floating, tiling;
         } color;
     } border;
 
-    /* [[wm.monitor]] monitor layout specifications */
-    LIST(struct wm_monitor {
-        /* name of the monitor per Xrandr */
-        char *name;
-        /* layout to use for this monitor */
+    /* [[wm.output]] output layout specifications */
+    LIST(struct wm_output {
+        /* name of the output specified by RandR */
+        utf8_t *name;
+        /* layout to use for this output */
         enum tiling_layout layout;
-    }, monitor);
+    }, output);
 
     /* [[wm.workspace]] definition of specific workspaces */
     LIST(struct wm_workspace {
         /* string name of this workspace */
-        char *name;
-        /* unique number identifier */
-        unsigned number;
-        /* the monitor this workspace is supposed to be on */
-        char *monitor;
+        utf8_t *name;
+        /* the output this workspace is supposed to be on */
+        utf8_t *output;
         /* layout to use for this workspace */
         enum tiling_layout layout;
     }, workspace);
@@ -98,18 +101,20 @@ extern struct wm {
     /* [[wm.window]] */
     LIST(struct wm_window {
         /* the name pattern to match against */
-        char *name;
+        utf8_t *name;
         /* the class pattern to match against */
-        char *class;
+        utf8_t *class;
         /* the instance pattern to match against */
-        char *instance;
+        utf8_t *instance;
 
         /* the workspace to appear on */
-        char *workspace;
-        /* the monitor to appear on */
-        char *monitor;
-        /* whether the window starts off hidden */
-        bool hidden;
+        utf8_t *workspace;
+        /* the output to appear on */
+        utf8_t *output;
+        /* whether the window starts off hidden
+         * (-1 for "unset", 0/1 for false/true)
+         */
+        int hidden;
         /* user chosen mode to overwrite the default mode */
         enum window_mode mode;
         /* specific border for this window */
@@ -162,5 +167,13 @@ void set_configuration_bindings(struct wm *wm);
  * @return NULL if there is no configuration file.
  */
 char *get_configuration_path(void);
+
+/* Get the configuration entry associated to given window.
+ *
+ * @configuration will hold the window configuration.
+ *
+ * @return whether the window has any configuration.
+ */
+bool get_window_configuration(const struct window *window, struct wm_window *configuration);
 
 #endif
