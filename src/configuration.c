@@ -202,7 +202,7 @@ void set_configuration_bindings(struct wm *wm)
         if (wm->binding[i].button != 0) {
             append_button_binding(wm->binding[i].is_release,
                     wm->binding[i].is_transparent,
-                    wm->binding[i].modifiers, wm->binding[i].button - 1,
+                    wm->binding[i].modifiers, wm->binding[i].button,
                     action);
         }
 

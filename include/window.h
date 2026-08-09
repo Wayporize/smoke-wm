@@ -54,6 +54,12 @@ bool is_focusable(struct window *window);
 /* Focus a specific window in the X world. */
 void focus_window(struct window *window);
 
+/* Grab a button on every managed window. */
+void grab_button_on_all_windows(uint16_t event_mask, uint8_t button, uint16_t modifiers);
+
+/* Ungrab a button on every managed window. */
+void ungrab_button_on_all_windows(uint8_t button, uint16_t modifiers);
+
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 

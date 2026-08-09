@@ -5,6 +5,7 @@
 
 #include <xcb/xcb_icccm.h>
 
+#include "binding.h"
 #include "configuration.h"
 #include "display.h"
 #include "monitor.h"
@@ -138,6 +139,22 @@ void focus_window(struct window *window)
     }
 }
 
+/* Grab a button on every managed window. */
+void grab_button_on_all_windows(uint16_t event_mask, uint8_t button, uint16_t modifiers)
+{
+    for (size_t i = 0; i < windows_length; i++) {
+        xcb_grab_button(display.xcb, true, windows[i]->id, event_mask, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, button, modifiers);
+    }
+}
+
+/* Ungrab a button on every managed window. */
+void ungrab_button_on_all_windows(uint8_t button, uint16_t modifiers)
+{
+    for (size_t i = 0; i < windows_length; i++) {
+        xcb_ungrab_button(display.xcb, button, windows[i]->id, modifiers);
+    }
+}
+
 /* Start to actually manage the window. */
 void manage_new_window(struct window *window, struct wm_window *configuration)
 {
@@ -186,6 +203,8 @@ void manage_new_window(struct window *window, struct wm_window *configuration)
         window->x, window->y, window->width, window->height
     };
     xcb_configure_window(display.xcb, window->id, mask, values);
+
+    grab_transparent_button_bindings_for_window(window->id);
 
     xcb_flush(display.xcb);
 }

@@ -389,14 +389,17 @@ static xcb_button_t resolve_button(struct toml_parse_context *context,
         { "LButton", 1 },
         { "Left", 1 },
         { "LeftButton", 1 },
+        { "M1", 1 },
 
         { "MButton", 2 },
         { "Middle", 2 },
         { "MiddleButton", 2 },
+        { "M2", 2 },
 
         { "RButton", 3 },
         { "Right", 3 },
         { "RightButton", 3 },
+        { "M3", 3 },
 
         { "ScrollUp", 4 },
         { "WheelUp", 4 },

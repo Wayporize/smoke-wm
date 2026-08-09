@@ -72,6 +72,13 @@ workspace = "Primary"
 "Super+Shift+4" = "move:2"
 "Super+Return" = "run:st"
 "Super+Shift+Return" = "run:xterm"
+"RightButton" = "run:xterm"
+
+# Add a NULL binding that does nothing but also blocks no normal user input
+[[wm.binding]]
+transparent = true
+button = "LeftButton"
+
 EOF
 
 XDG_CONFIG_HOME="$temp" XDG_CONFIG_DIRS= ~/Coding/smoke-wm/build/smoke-wm >~/Coding/smoke-wm/log.txt

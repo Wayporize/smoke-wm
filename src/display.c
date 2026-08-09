@@ -751,6 +751,11 @@ void handle_button_press_or_release(xcb_button_press_event_t *event, bool is_rel
             execute_action(&binding[0]);
         }
     }
+    /* replay transparent events such that the underlying window also receives
+     * them */
+    if (is_transparent) {
+        xcb_allow_events(display.xcb, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
+    }
 }
 
 /* Handle an incoming client message. */

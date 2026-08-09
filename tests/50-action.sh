@@ -21,6 +21,7 @@ mkdir "$temp/smoke-wm"
 cat >"$temp/smoke-wm/config.toml" <<EOF
 [wm.bindings]
 "Mod4+r" = "run:xterm"
+"LeftButton" = "run:xterm"
 EOF
 
 wait_for_line() {
@@ -40,5 +41,9 @@ XDG_CONFIG_HOME="$temp" XDG_CONFIG_DIRS= "$SMOKE_WM_FAKE_RANDR" >"$fifo" &
 wait_for_line "taking over"
 
 xdotool key Super_L+r
+
+wait_for_line "running action RUN: xterm"
+
+xdotool click 1
 
 wait_for_line "running action RUN: xterm"
