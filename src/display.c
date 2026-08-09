@@ -814,12 +814,12 @@ void handle_server_events(void)
                 break;
 
             case XCB_KEY_PRESS:
-            case XCB_KEY_RELEASE: /* the user presser or released a grabbed key */
+            case XCB_KEY_RELEASE: /* the user pressed or released a grabbed key */
                 handle_key_press_or_release((xcb_key_press_event_t*) event, event->response_type == XCB_KEY_RELEASE);
                 break;
 
             case XCB_BUTTON_PRESS:
-            case XCB_BUTTON_RELEASE: /* the user presser or released a grabbed button */
+            case XCB_BUTTON_RELEASE: /* the user pressed or released a grabbed button */
                 handle_button_press_or_release((xcb_button_press_event_t*) event, event->response_type == XCB_BUTTON_RELEASE);
                 break;
 
