@@ -17,8 +17,13 @@ STATIC_LIST(struct window*, windows);
 /* Get the internal representation of an X window. */
 struct window *get_internal_window(xcb_window_t id)
 {
+    /* shortcut for a common parameter */
+    if (id == display.root) {
+        return NULL;
+    }
+
     for (size_t i = 0; i < windows_length; i++) {
-        if (windows[i]->id == id) {
+        if (windows[i]->id == id || windows[i]->outer_id == id) {
             return windows[i];
         }
     }
@@ -28,19 +33,110 @@ struct window *get_internal_window(xcb_window_t id)
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event)
 {
+    struct window *window = get_internal_window(event->window);
+    if (window != NULL) {
+        /* do not register the frame windows we created ourselves */
+        return;
+    }
+
     const uint32_t values[] = {
         XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
     };
     xcb_change_window_attributes(display.xcb, event->window, XCB_CW_EVENT_MASK, values);
 
     const struct window window_data = {
-        .id = event->window, .x = event->x, .y = event->y, .width = event->width, .height = event->height,
+        .id = event->window, .outer_id = event->window, .x = event->x, .y = event->y, .width = event->width, .height = event->height,
         .state = XCB_ICCCM_WM_STATE_NEW
     };
-    struct window *const window = DUPLICATE(&window_data, 1);
+    window = DUPLICATE(&window_data, 1);
     LIST_APPEND_VALUE(windows, window);
 
-    notef("window %#x creation registered\n", event->window);
+    LOG("window %#x creation registered\n", window->id);
+}
+
+/* Setup the frame of a window. */
+static void setup_window_frame(struct window *window, enum border_decoration decoration, int32_t border_size)
+{
+    if (decoration == BORDER_NONE) {
+        if (window->id == window->outer_id) {
+            /* the window already has no border */
+            return;
+        }
+
+        xcb_free_gc(display.xcb, window->gc);
+        window->gc = XCB_NONE;
+
+        xcb_destroy_window(display.xcb, window->id);
+        window->outer_id = window->id;
+
+        /* give the window its size with the border deducted */
+        const uint16_t configure_mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
+        const uint32_t configure_values[] = {
+            window->x, window->y, window->width, window->height
+        };
+        xcb_configure_window(display.xcb, window->id, configure_mask, configure_values);
+        LOG("configuring window %#" PRIx32 " to %#" PRId32 ", %#" PRId32 ", %#" PRId32 ", %#" PRId32 "\n",
+                window->id, window->x, window->y, window->width, window->height);
+
+        /* make the window a child of the root again */
+        xcb_reparent_window(display.xcb, window->id, display.root, window->x, window->y);
+
+        /* now it is no longer needed in the save set */
+        xcb_change_save_set(display.xcb, XCB_SET_MODE_DELETE, window->id);
+    } else {
+        if (window->id != window->outer_id) {
+            /* the window already has a border */
+            return;
+        }
+
+        /* create the actual outer frame window */
+        const uint32_t mask = XCB_CW_EVENT_MASK;
+        const uint32_t values[] = {
+            XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+                XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_FOCUS_CHANGE };
+        window->outer_id = xcb_generate_id(display.xcb);
+        xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT, window->outer_id, display.root,
+                window->x, window->y, window->width, window->height, 0,
+                XCB_WINDOW_CLASS_COPY_FROM_PARENT, XCB_COPY_FROM_PARENT, mask, values);
+
+        /* create a graphics context to render the border with */
+        window->gc = xcb_generate_id(display.xcb);
+        xcb_create_gc(display.xcb, window->gc, window->outer_id, 0, NULL);
+
+        /* add the window to the save set such that if the window manager exits, the
+         * window is automatically reparented to the root again */
+        xcb_change_save_set(display.xcb, XCB_SET_MODE_INSERT, window->id);
+
+        /* make the new window a child of the frame window */
+        LOG("reparenting window %#" PRIx32 " into frame %#" PRIx32 "\n", window->id, window->outer_id);
+        xcb_reparent_window(display.xcb, window->id, window->outer_id, border_size, border_size);
+
+        /* map the inner window so it is immediately shown when the parent is
+         * mapped */
+        xcb_map_window(display.xcb, window->id);
+    }
+}
+
+/* Redraw the frame of a window. */
+void redraw_window(xcb_window_t id)
+{
+    struct window *const window = get_internal_window(id);
+    if (window == NULL || window->gc == XCB_NONE) {
+        return;
+    }
+    struct wm_window configuration;
+    (void) get_window_configuration(window, &configuration);
+    const xcb_rectangle_t rectangle = { window->x, window->y, window->width, window->height };
+    const uint32_t mask = XCB_GC_FOREGROUND;
+    struct wm_color color;
+    if (window->id == display.focus) {
+        color = configuration.border.color.focused;
+    } else {
+        color = configuration.border.color.inactive;
+    }
+    const uint32_t values[] = { ((color.red / 256) << 16) | ((color.green / 256) << 8) | (color.blue / 256) };
+    xcb_change_gc(display.xcb, window->gc, mask, values);
+    xcb_poly_fill_rectangle(display.xcb, window->outer_id, window->gc, 1, &rectangle);
 }
 
 /* Notify of a property change in a window. */
@@ -91,13 +187,8 @@ static void set_initial_size(struct window *window)
 bool is_focusable(struct window *window)
 {
     if (window == NULL) {
-        /* `NULL` represent the root window */
+        /* `NULL` represents the root window */
         return true;
-    }
-
-    if (window->state != XCB_ICCCM_WM_STATE_NORMAL) {
-        /* can not focus invisible windows */
-        return false;
     }
 
     if (((window->hints.flags & XCB_ICCCM_WM_HINT_INPUT) && window->hints.input) ||
@@ -117,8 +208,7 @@ void focus_window(struct window *window)
 {
     if (window == NULL) {
         /* `FOCUS_NONE` for full manual management */
-        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE,
-                display.root, display.last_timestamp);
+        xcb_set_input_focus(display.xcb, XCB_INPUT_FOCUS_NONE, display.root, display.last_timestamp);
     /* check if the window needs us to focus it directly */
     } else if (((window->hints.flags & XCB_ICCCM_WM_HINT_INPUT) && window->hints.input) ||
                 /* assume input = true if missing */
@@ -176,7 +266,7 @@ void manage_new_window(struct window *window, struct wm_window *configuration)
         for (uint32_t i = 0; i < protocols.atoms_len; i++) {
             if (protocols.atoms[i] == display.wm_take_focus) {
                 window->protocols.has_wm_take_focus = true;
-                notef("window supports WM_TAKE_FOCUS\n");
+                LOG("window supports WM_TAKE_FOCUS\n");
             }
         }
         xcb_icccm_get_wm_protocols_reply_wipe(&protocols);
@@ -191,28 +281,30 @@ void manage_new_window(struct window *window, struct wm_window *configuration)
     window->class = xstrdup(class.class_name);
     xcb_icccm_get_wm_class_reply_wipe(&class);
 
+    /* get the window configuration */
     get_window_configuration(window, configuration);
 
+    /* remove any X borders from the window */
+    const uint16_t configure_mask = XCB_CONFIG_WINDOW_BORDER_WIDTH;
+    const uint32_t configure_values[] = { 0 };
+    xcb_configure_window(display.xcb, window->id, configure_mask, configure_values);
+
+    /* get some sensible initial floating size */
     set_initial_size(window);
 
-    notef("configuring window %#x to %" PRIi32 ", %" PRIi32 ", %" PRIi32 ", %" PRIi32 "\n",
-            window->id, window->x, window->y, window->width, window->height);
-    const uint16_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
-        XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
-    const uint32_t values[] = {
-        window->x, window->y, window->width, window->height
-    };
-    xcb_configure_window(display.xcb, window->id, mask, values);
+    /* create the outer frame window if the configuration requires it */
+    setup_window_frame(window, configuration->border.decoration, configuration->border.size);
 
     grab_transparent_button_bindings_for_window(window->id);
 
+    /* make all of this immediately noted to the server */
     xcb_flush(display.xcb);
 }
 
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event)
 {
-    notef("got map request for %#x\n", event->window);
+    LOG("got map request for %#x\n", event->window);
 
     struct window *const window = get_internal_window(event->window);
     if (window == NULL) {
@@ -249,11 +341,14 @@ void handle_map_request(xcb_map_request_event_t *event)
     struct workspace *const workspace = get_window_workspace(window);
     if (workspace != NULL && workspace->state == WORKSPACE_HIDDEN) {
         window->state = XCB_ICCCM_WM_STATE_ICONIC;
+        /* make sure that when the user switches to this workspace, this new
+         * window is immediately focused */
+        update_window_focus_number(window);
     }
 
     if (window->state == XCB_ICCCM_WM_STATE_NORMAL) {
-        notef("window %#" PRIx32 " is shown\n", window->id);
-        xcb_map_window(display.xcb, window->id);
+        LOG("showing window %#" PRIx32 "\n", window->outer_id);
+        xcb_map_window(display.xcb, window->outer_id);
         /* TODO: configure if a window should be auto focused? */
         focus_window(window);
     }
@@ -265,10 +360,9 @@ void handle_map_request(xcb_map_request_event_t *event)
 }
 
 /* Update the focus number of @window to be the most recent. */
-void update_window_focus(struct window *window)
+void update_window_focus_number(struct window *window)
 {
     uint64_t maximum_focus = 0;
-
     for (size_t i = 0; i < windows_length; i++) {
         if (windows[i] == window) {
             continue;
@@ -277,9 +371,32 @@ void update_window_focus(struct window *window)
             maximum_focus = windows[i]->focus_order;
         }
     }
-
     /* make sure the window has the biggest focus of all */
     window->focus_order = maximum_focus + 1;
+}
+
+/* Update the internal window focus to a new window. */
+void update_window_focus(struct window *window)
+{
+    /* switch the focus and redraw the border of the old focus window */
+    const xcb_window_t old_focus = display.focus;
+    if (window == NULL) {
+        display.focus = display.root;
+    } else {
+        display.focus = window->id;
+    }
+    redraw_window(old_focus);
+
+    if (window == NULL) {
+        LOG("focus changed to %#" PRIx32 " (root)\n", display.focus);
+    } else {
+        update_window_focus_number(window);
+
+        redraw_window(window->id);
+        report_focus_change_to_workspaces(window);
+
+        LOG("focus changed to %#" PRIx32 "\n", display.focus);
+    }
 }
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
@@ -308,58 +425,32 @@ void handle_configure_request(xcb_configure_request_event_t *event)
 
     synthetic_event->override_redirect = false;
 
-    notef("sending synthetic configure event to %#" PRIx32 "\n", event->window);
+    LOG("sending synthetic configure event to %#" PRIx32 "\n", event->window);
     xcb_send_event(display.xcb, false, event->window,
             XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*) synthetic_event);
     free(synthetic_event);
     xcb_flush(display.xcb);
 }
 
-/* Try to focus a window that makes sense or the root if none available.
- *
- * @window is the window the focus should be relative to. This window will
- *         itself not be focused.
- */
-static void focus_next_available_window(struct window *window)
+/* Try to focus a window that makes sense or the root if none available. */
+void focus_next_available_window(void)
 {
-    struct window **search_windows;
-    size_t search_windows_length;
-    struct workspace *workspace = get_window_workspace(window);
-    if (workspace == NULL) {
-        struct monitor *monitor = get_monitor_from_rectangle(window->x, window->y, window->width, window->height);
-        if (monitor == NULL) {
-            search_windows = windows;
-            search_windows_length = windows_length;
-        } else {
-            for (size_t i = 0; i < monitor->workspaces_length; i++) {
-                if (monitor->workspaces[i]->state >= WORKSPACE_VISIBLE) {
-                    workspace = monitor->workspaces[i];
-                    break;
-                }
-            }
-        }
-    }
-    /* do not use an else */
-    if (workspace != NULL) {
-        search_windows = workspace->windows;
-        search_windows_length = workspace->windows_length;
-    }
-
+    struct workspace *const workspace = get_active_workspace();
     uint64_t maximum_focus = 0;
     struct window *candidate_window = NULL;
-    for (size_t i = 0; i < search_windows_length; i++) {
-        if (search_windows[i] == window) {
+    for (size_t i = 0; i < workspace->windows_length; i++) {
+        if (workspace->windows[i]->id == display.focus) {
             /* ignore the previously focused window */
             continue;
         }
-        if (search_windows[i]->state != XCB_ICCCM_WM_STATE_NORMAL) {
+        if (workspace->windows[i]->state != XCB_ICCCM_WM_STATE_NORMAL) {
             /* ignore invisible windows */
             continue;
         }
         /* prefer the window if it was focused more recently */
-        if (search_windows[i]->focus_order >= maximum_focus) {
-            maximum_focus = search_windows[i]->focus_order;
-            candidate_window = search_windows[i];
+        if (workspace->windows[i]->focus_order >= maximum_focus) {
+            maximum_focus = workspace->windows[i]->focus_order;
+            candidate_window = workspace->windows[i];
         }
     }
     focus_window(candidate_window);
@@ -369,22 +460,53 @@ static void focus_next_available_window(struct window *window)
 void configure_window(xcb_configure_notify_event_t *event)
 {
     struct window *const window = get_internal_window(event->window);
-    if (window != NULL && (event->x != window->x || event->y != window->y ||
-                event->width != window->width || event->height != window->height)) {
-        struct workspace *workspace;
+    /* Only consider configure events for outer windows.
+     * There was an attempt to also consider when the inner window resizes and
+     * adjust the outer window.  However, this lead to displacement and side
+     * effects.  That could have been fixed by storing more information in the
+     * window structure but it is not worth it. */
+    if (window == NULL || window->outer_id != event->window) {
+        return;
+    }
 
+    bool position_changed, size_changed;
+
+    if (event->x != window->x || event->y != window->y) {
+        position_changed = true;
+    } else {
+        position_changed = false;
+    }
+
+    if (event->width != window->width || event->height != window->height) {
+        size_changed = true;
+    } else {
+        size_changed = false;
+    }
+
+    if (position_changed || size_changed) {
         window->x = event->x;
         window->y = event->y;
         window->width = event->width;
         window->height = event->height;
-        notef("window position and size of %#" PRIx32 " changed\n", window->id);
+        LOG("window position and size of %#" PRIx32 " changed\n", window->outer_id);
+
+        if (size_changed && window->id != window->outer_id) {
+            struct wm_window configuration;
+            LOG("frame size changed, also resizing inner window %#" PRIx32 "\n", window->id);
+            (void) get_window_configuration(window, &configuration);
+            const uint16_t configure_mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
+            const uint32_t configure_values[] = {
+                window->width - 2 * configuration.border.size, window->height - 2 * configuration.border.size
+            };
+            xcb_configure_window(display.xcb, window->id, configure_mask, configure_values);
+        }
 
         /* change the workspace based on the new position */
         if (window->state != XCB_ICCCM_WM_STATE_NORMAL) {
             /* ignore invisible windows */
             return;
         }
-        workspace = get_window_workspace(window);
+        struct workspace *const workspace = get_window_workspace(window);
         if (workspace == NULL) {
             /* do not add it to a workspace if it was not associated to any */
             return;
@@ -420,8 +542,17 @@ void change_window_state(xcb_window_t id, xcb_icccm_wm_state_t state)
         return;
     }
     window->state = state;
-    if (state != XCB_ICCCM_WM_STATE_NORMAL && window->id == display.focus) {
-        focus_next_available_window(window);
+    if (state != XCB_ICCCM_WM_STATE_NORMAL) {
+        /* if the inner window is somehow unmapped, also unmap the outer window */
+        if (id == window->id && window->outer_id != window->id) {
+            xcb_unmap_window(display.xcb, window->outer_id);
+            xcb_map_window(display.xcb, window->id);
+        }
+
+        /* if the focused window is hidden, focus another available window */
+        if (id == display.focus) {
+            focus_next_available_window();
+        }
     }
 
     /* update the `WM_STATE` property */
@@ -468,10 +599,6 @@ void destroy_window(xcb_destroy_notify_event_t *event)
         return;
     }
 
-    if (window->id == display.focus) {
-        focus_next_available_window(window);
-    }
-
     remove_window_from_workspace(window);
 
     for (size_t i = 0; i < windows_length; i++) {
@@ -481,7 +608,12 @@ void destroy_window(xcb_destroy_notify_event_t *event)
         }
     }
 
-    notef("window %#x destruction registered\n", window->id);
+    /* also destroy the surrounding frame if it exists */
+    if (window->id != window->outer_id) {
+        xcb_destroy_window(display.xcb, window->outer_id);
+    }
+
+    LOG("window %#x destruction registered\n", window->id);
 
     /* free all window resources */
     free(window->name);
@@ -534,7 +666,9 @@ void report_configuration_change_to_windows(struct wm_window *configured, size_t
                     windows[j]->y = monitor->y + y;
                     const uint16_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
                     const uint32_t values[] = { windows[j]->x, windows[j]->y };
-                    xcb_configure_window(display.xcb, windows[j]->id, mask, values);
+                    xcb_configure_window(display.xcb, windows[j]->outer_id, mask, values);
+                } else if (configured[i].border.decoration != BORDER_UNSPECIFIED) {
+                    setup_window_frame(windows[j], configured[i].border.decoration, configured[i].border.size);
                 }
             }
         }

@@ -32,13 +32,15 @@ xterm &
 xterm_pid="$!"
 wait_for_line "window (0x[0-9a-f]+) creation registered"
 xterm_id="${BASH_REMATCH[1]}"
+wait_for_line "reparenting window $xterm_id into frame (0x[0-9a-f]+)"
+frame_id="${BASH_REMATCH[1]}"
 
 # Get the current workspace, make sure the window is added
 wait_for_line "window $xterm_id added to workspace ([0-9]+)"
 xterm_workspace_id="${BASH_REMATCH[1]}"
 
 # Move the window such that the workspace changes because of the new position
-"$TOOL" windowmove "$xterm_id" 820 0 &
+"$TOOL" windowmove "$frame_id" 820 0 &
 wait_for_line "window $xterm_id removed from workspace $xterm_workspace_id"
 wait_for_line "window $xterm_id added to workspace ([0-9]+)"
 other_workspace_id="${BASH_REMATCH[1]}"
@@ -48,6 +50,6 @@ if [ "$other_workspace_id" = "$xterm_workspace_id" ] ; then
 fi
 
 # Move the window back to witness the reverse change
-"$TOOL" windowmove "$xterm_id" 0 0 0 &
+"$TOOL" windowmove "$frame_id" 0 0 0 &
 wait_for_line "window $xterm_id removed from workspace $other_workspace_id"
 wait_for_line "window $xterm_id added to workspace $xterm_workspace_id"

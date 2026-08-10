@@ -299,9 +299,9 @@ static void handle_error(xcb_generic_error_t *error)
         extension = "core";
     }
     if (minor == NULL) {
-        notef("%s error caused by %s: %s\n", extension, major, string);
+        LOG("%s error caused by %s: %s\n", extension, major, string);
     } else {
-        notef("%s error caused by %s:%s: %s\n", extension, major, minor, string);
+        LOG("%s error caused by %s:%s: %s\n", extension, major, minor, string);
     }
 }
 
@@ -336,7 +336,7 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
         switch (event->xkbType) {
         case XCB_XKB_NEW_KEYBOARD_NOTIFY:
         case XCB_XKB_MAP_NOTIFY:
-            notef("xkb: mapping changed\n");
+            LOG("xkb: mapping changed\n");
             refresh_keyboard_mapping();
             clear_bindings();
             set_configuration_bindings(&Configuration);
@@ -350,7 +350,7 @@ static void handle_xkb_event(xcb_generic_event_t *generic_event)
                     event->baseMods, event->latchedMods, event->lockedMods,
                     event->baseGroup, event->latchedGroup, event->lockedGroup);
             if ((change & XKB_STATE_LAYOUT_EFFECTIVE)) {
-                notef("xkb: layout changed\n");
+                LOG("xkb: layout changed\n");
                 /* layout has changed, simply re-create the bindings with the new
                  * layout in the keyboard state
                  */
@@ -511,7 +511,7 @@ static int wait_for_destroy_notification(xcb_window_t window)
             if (status != 0 &&
                     event->response_type == XCB_DESTROY_NOTIFY &&
                     notify->window == window) {
-                notef("...success\n");
+                LOG("...success\n");
                 free(event);
                 return 0;
             }
@@ -525,7 +525,7 @@ static int wait_for_destroy_notification(xcb_window_t window)
                 NULL, NULL, &timeout);
     } while (status > 0);
 
-    notef("...failed: timeout\n");
+    LOG("...failed: timeout\n");
     return 1;
 }
 
@@ -548,7 +548,7 @@ enum wm_ownership_status take_wm_ownership(void)
     xcb_create_window(display.xcb, XCB_COPY_FROM_PARENT,
             display.wm_sn_window, display.root, -1, -1, 1, 1, 0,
             XCB_WINDOW_CLASS_INPUT_ONLY, XCB_COPY_FROM_PARENT, 0, NULL);
-    notef("created selection window %#x\n", display.wm_sn_window);
+    LOG("created selection window %#x\n", display.wm_sn_window);
 
     previous_owner = get_selection_owner(display.wm_sn_atom);
     previous_owner = change_selection_owner_event_mask_to_destruction(
@@ -563,14 +563,14 @@ enum wm_ownership_status take_wm_ownership(void)
     /* make sure our selection owner request goes out */
     xcb_flush(display.xcb);
 
-    notef("sent request to become the selection owner\n");
+    LOG("sent request to become the selection owner\n");
 
     /* wait until the previous owner destroys its owner window which means
      * (as specified in ICCCM 2.8) that we can now select for substructure
      * redirect events on the root window
      */
     if (previous_owner != XCB_NONE) {
-        notef("waiting until the old manager destroys window %#x...\n",
+        LOG("waiting until the old manager destroys window %#x...\n",
             previous_owner);
         if (wait_for_destroy_notification(previous_owner) != 0) {
             return WM_OWNERSHIP_TIMEOUT;
@@ -580,7 +580,7 @@ enum wm_ownership_status take_wm_ownership(void)
     /* at this point, the owner might have already changed again */
     owner = get_selection_owner(display.wm_sn_atom);
     if (owner != display.wm_sn_window) {
-        notef("a third manager interferred, can not take over\n");
+        LOG("a third manager interferred, can not take over\n");
         status = WM_OWNERSHIP_INTERFERRED;
     } else {
         xcb_client_message_event_t message;
@@ -607,7 +607,7 @@ enum wm_ownership_status take_wm_ownership(void)
         };
         cookie = xcb_change_window_attributes_checked(display.xcb,
                 display.root, managed_root_mask, managed_root_attributes);
-        notef("sending request to change root event mask\n");
+        LOG("sending request to change root event mask\n");
         error = xcb_request_check(display.xcb, cookie);
         /* check for an error which can occur yet again because another
          * manager interferred
@@ -624,16 +624,16 @@ enum wm_ownership_status take_wm_ownership(void)
                  * while we were both selecting the owner at the same time
                  * so this was not spotted earlier
                  */
-                notef("a third manager interferred, can not select event mask\n");
+                LOG("a third manager interferred, can not select event mask\n");
                 status = WM_OWNERSHIP_INTERFERRED;
             } else {
                 /* someone has the mask but there is no owner */
-                notef("a non-ICCCM-compliant manager is present, can not overrule\n");
+                LOG("a non-ICCCM-compliant manager is present, can not overrule\n");
                 status = WM_OWNERSHIP_NONCOMPLIANT;
             }
         } else {
             /* associated to a few manager tests */
-            notef("taking over\n");
+            LOG("taking over\n");
             /* TODO: get current focus */
             /* TODO: initialize workspaces */
             /* TODO: query existing windows */
@@ -664,7 +664,7 @@ static void go_dormant_and_wait_for_selection(xcb_window_t owner)
     xcb_destroy_notify_event_t *notify;
 
     /* associated to a few manager tests */
-    notef("going dormant\n");
+    LOG("going dormant\n");
 
     /* TODO: also make the entire window/workspace module go dormant */
 
@@ -719,7 +719,7 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
             /* get the new owner and go dormant */
             new_owner = get_selection_owner(display.wm_sn_atom);
             go_dormant_and_wait_for_selection(new_owner);
-            notef("waking up\n");
+            LOG("waking up\n");
 
             status = take_wm_ownership();
             if (status == WM_OWNERSHIP_NONCOMPLIANT) {
@@ -827,6 +827,10 @@ void handle_server_events(void)
                 create_window((xcb_create_notify_event_t*) event);
                 break;
 
+            case XCB_EXPOSE: /* a window needs redrawing */
+                redraw_window(((xcb_expose_event_t*) event)->window);
+                break;
+
             case XCB_PROPERTY_NOTIFY: /* a window property changed */
                 change_property((xcb_property_notify_event_t*) event);
                 break;
@@ -843,6 +847,8 @@ void handle_server_events(void)
                 handle_map_request((xcb_map_request_event_t*) event);
                 break;
 
+            /* we listen for focus events on the root window `display.root`, our
+             * frame windows and all windows within those frames */
             case XCB_FOCUS_IN: { /* a window gained focus */
                 xcb_focus_in_event_t *focus;
 
@@ -855,39 +861,51 @@ void handle_server_events(void)
                  * ungrabs seems safe
                  */
                 if (focus->mode == XCB_NOTIFY_MODE_NORMAL || focus->mode == XCB_NOTIFY_MODE_UNGRAB) {
-                    /* the window got directly focused */
-                    if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
-                            /* "virtual" means an inferior got focused but not the
-                             * window itself
-                             */
-                            ((focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL ||
-                                focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL) &&
-                                /* if the root is focused here this means a
-                                 * child top level will be focused
-                                 */
-                                focus->event != display.root) ||
-                            /* the focus might have reverted with `FOCUS_PARENT`
-                             * or other edge cases that were not considered...
-                             */
-                            focus->detail == XCB_NOTIFY_DETAIL_INFERIOR ||
-                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR ||
-                            /* the window with the pointer on it was focused
-                             * because the focused window lost focus
-                             */
-                            focus->detail == XCB_NOTIFY_DETAIL_POINTER) {
-                        /* the truest "focus changed from A to B" event */
-                        notef("focus changed to %#" PRIx32 "\n", focus->event);
-                        display.focus = focus->event;
-                        struct window *const window = get_internal_window(focus->event);
-                        if (window != NULL) {
-                            report_focus_change_to_workspaces(window);
+                    struct window *const window = get_internal_window(focus->event);
+
+                    /* if None or PointerRoot received focus, focus any
+                     * available window */
+                    if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
+                            focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
+                        /* confirm that this happens on our screen */
+                        if (focus->event == display.root) {
+                            focus_next_available_window();
+                        }
+                    /* The focus moved down the tree, so it either moved from
+                     * our frame/root or from the root to our frame but it
+                     * cannot be the root.  This also includes NotifyPointer
+                     * because the handling here works right for this special
+                     * case which must be triggered with external help. */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_POINTER ||
+                            focus->detail == XCB_NOTIFY_DETAIL_ANCESTOR) {
+                        if (window == NULL || window->id == focus->event) {
+                            update_window_focus(window);
+                        } else {
+                            focus_window(window);
+                        }
+                    /* the focus moved up the tree, so it either moved to the
+                     * root or our frame window
+                     */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_INFERIOR) {
+                        if (focus->event == display.root) {
+                            update_window_focus(NULL);
+                        } else if (window->outer_id == focus->event && window->id != window->outer_id) {
+                            /* move the focus right back to the inner window */
+                            focus_window(window);
+                        }
+                    /* the root was a common ancestor or the focus itself and
+                     * this gets to our frame or a child of the window within
+                     * the frame got focused */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_VIRTUAL ||
+                                focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL) {
+                        /* if the outer frame got focused, this means we will
+                         * soon get the same event but for the inner window, so
+                         * just check of this case (same for root) */
+                        if (window != NULL && window->id == focus->event) {
                             update_window_focus(window);
                         }
-                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
-                            focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
-                        /* TODO: the root or None got focused, delegate the
-                         * focus to a different window
-                         */
+                    } else if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR) {
+                        update_window_focus(window);
                     }
                 }
                 break;
@@ -903,6 +921,7 @@ void handle_server_events(void)
 
             case XCB_MAP_NOTIFY: /* a window was shown */
                 change_window_state(((xcb_map_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_NORMAL);
+                redraw_window(((xcb_map_notify_event_t*) event)->window);
                 break;
 
             case XCB_DESTROY_NOTIFY: /* a window was destroyed */
@@ -922,7 +941,7 @@ void handle_server_events(void)
                 break;
 
             default:
-                notef("event: %u\n", event->response_type);
+                LOG("event: %u\n", event->response_type);
                 /* TODO: Handle more core X11 events */
             }
         }

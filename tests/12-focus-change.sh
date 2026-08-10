@@ -45,28 +45,15 @@ wait_for_line "taking over"
 
 xterm &
 xterm_pid="$!"
-
-wait_for_line "focus changed to (0x[0-9a-f]+)"
+wait_for_line "window (0x[0-9a-f]+) creation registered"
 window_id="${BASH_REMATCH[1]}"
-if [ "$window_id" = "$root_id" ] ; then
-    echo "root should not have been focused in any way"
-    exit 1
-fi
+wait_for_line "focus changed to $window_id"
 
 xterm &
 xterm_pid2="$!"
-
-wait_for_line "focus changed to (0x[0-9a-f]+)"
-other_window_id="${BASH_REMATCH[1]}"
-if [ "$other_window_id" = "$root_id" ] ; then
-    echo "root should not have been focused in any way (2nd)"
-    exit 1
-fi
-
-if [ "$other_window_id" = "$window_id" ] ; then
-    echo "the other window should have been focused"
-    exit 1
-fi
+wait_for_line "window (0x[0-9a-f]+) creation registered"
+window_id2="${BASH_REMATCH[1]}"
+wait_for_line "focus changed to $window_id2"
 
 kill "$xterm_pid2"
 

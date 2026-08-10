@@ -122,7 +122,9 @@ static void update_workspace(struct workspace *workspace)
             MAX(MIN(monitor->width, max_width), min_width),
             MAX(MIN(monitor->height, max_height), min_height)
         };
-        xcb_configure_window(display.xcb, window->id, mask, values);
+        LOG("configuring window %#" PRIx32 " to %#" PRIu32 ", %#" PRIu32 ", %#" PRIu32 ", %#" PRIu32 "\n",
+                window->outer_id, values[0], values[1], values[2], values[3]);
+        xcb_configure_window(display.xcb, window->outer_id, mask, values);
     }
 }
 
@@ -184,12 +186,12 @@ static struct workspace *create_workspace(struct monitor *monitor, const utf8_t 
     if (monitor != NULL) {
         LIST_APPEND_VALUE(monitor->workspaces, workspace);
     }
-    notef("workspace %s added to monitor %" PRIu32 "\n", name, monitor->id);
+    LOG("workspace %s added to monitor %" PRIu32 "\n", name, monitor->id);
 
     /* if this is the first workspace to exist, make it active */
     if (workspaces_length == 1) {
         workspace->state = WORKSPACE_ACTIVE;
-    } else {
+    } else if (monitor->workspaces_length == 1) {
         workspace->state = WORKSPACE_VISIBLE;
     }
 
@@ -199,7 +201,7 @@ static struct workspace *create_workspace(struct monitor *monitor, const utf8_t 
 }
 
 /* Get the currently active workspace. */
-static struct workspace *get_active_workspace(void)
+struct workspace *get_active_workspace(void)
 {
     for (size_t i = 0; i < workspaces_length; i++) {
         if (workspaces[i]->state == WORKSPACE_ACTIVE) {
@@ -210,7 +212,7 @@ static struct workspace *get_active_workspace(void)
     return create_workspace(NULL, NULL);
 }
 
-/* Dump the monitor setup to stdout. */
+/* Dump the monitor setup to `stdout`. */
 static void dump_monitor_setup(void)
 {
     printf("primary %" PRIu32 "\n", primary);
@@ -314,9 +316,9 @@ void initialize_monitor_setup(xcb_randr_get_screen_resources_cookie_t cookie)
     free(primary_reply);
 
     /* associated to test "randr-setup" */
-    notef("start of dumping monitor setup\n");
+    LOG("start of dumping monitor setup\n");
     dump_monitor_setup();
-    notef("end of dumping monitor setup\n");
+    LOG("end of dumping monitor setup\n");
 }
 
 /* Get the monitor that is projected onto the output with given name. */
@@ -391,7 +393,7 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_c
 {
     struct output *info;
 
-    notef("randr: output %" PRIu32 " changed: %" PRIu32 " %u" "\n", output,
+    LOG("randr: output %" PRIu32 " changed: %" PRIu32 " %u" "\n", output,
             crtc, connection);
     info = get_output(output);
     if (info == NULL) {
@@ -400,7 +402,7 @@ void change_output(xcb_randr_output_t output, xcb_randr_crtc_t crtc, xcb_randr_c
         uint8_t *name;
         int name_length;
 
-        notef("this output is new\n");
+        LOG("this output is new\n");
 
         /* send out a request for the name, this is so rare that it does not
          * need to be efficient, in fact it might never happen once in a user's
@@ -441,11 +443,11 @@ void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotatio
 {
     struct monitor *monitor;
 
-    notef("randr: crtc %" PRIu32 " changed: %" PRIu32 " %u %" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 "\n",
+    LOG("randr: crtc %" PRIu32 " changed: %" PRIu32 " %u %" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 "\n",
             crtc, mode, rotation, x, y, width, height);
     monitor = get_monitor(crtc);
     if (monitor == NULL) {
-        notef("this crtc is new\n");
+        LOG("this crtc is new\n");
 
         ALLOCATE_ZERO(monitor, 1);
         LIST_APPEND_VALUE(monitors, monitor);
@@ -485,7 +487,7 @@ void change_crtc(xcb_randr_crtc_t crtc, xcb_randr_mode_t mode, xcb_randr_rotatio
 
             LIST_APPEND(windows, workspace->windows, workspace->windows_length);
 
-            notef("workspace %s removed\n", workspace->name);
+            LOG("workspace %s removed\n", workspace->name);
 
             if (workspace->state == WORKSPACE_ACTIVE) {
                 is_active_workspace_gone = true;
@@ -552,11 +554,13 @@ static void change_active_workspace(struct workspace *active)
         return;
     }
 
+    LOG("switching to workspace %s\n", active->name);
+
     /* map new windows if the workspace was previously hidden */
     if (active->state == WORKSPACE_HIDDEN) {
         for (size_t i = 0; i < active->windows_length; i++) {
-            notef("showing window %#" PRIx32 "\n", active->windows[i]->id);
-            xcb_map_window(display.xcb, active->windows[i]->id);
+            LOG("window %#" PRIx32 " is shown\n", active->windows[i]->outer_id);
+            xcb_map_window(display.xcb, active->windows[i]->outer_id);
         }
     }
 
@@ -564,8 +568,8 @@ static void change_active_workspace(struct workspace *active)
     if (get_workspace_monitor(old_active) == get_workspace_monitor(active)) {
         old_active->state = WORKSPACE_HIDDEN;
         for (size_t i = 0; i < old_active->windows_length; i++) {
-            notef("hiding window %#" PRIx32 "\n", old_active->windows[i]->id);
-            xcb_unmap_window(display.xcb, old_active->windows[i]->id);
+            LOG("window %#" PRIx32 " is hidden\n", old_active->windows[i]->outer_id);
+            xcb_unmap_window(display.xcb, old_active->windows[i]->outer_id);
         }
     } else {
         old_active->state = WORKSPACE_VISIBLE;
@@ -573,7 +577,7 @@ static void change_active_workspace(struct workspace *active)
 
     active->state = WORKSPACE_ACTIVE;
 
-    notef("workspace %s focused\n", active->name);
+    LOG("workspace %s focused\n", active->name);
 
     /* update the `_NET_CURRENT_DESKTOP` property */
     update_ewmh_desktop_properties();
@@ -596,7 +600,7 @@ void change_window_workspace_directly(struct window *window, struct workspace *w
     LIST_APPEND_VALUE(workspace->windows, window);
     update_workspace(workspace);
 
-    notef("window %#" PRIx32 " added to workspace %s\n", window->id, workspace->name);
+    LOG("window %#" PRIx32 " added to workspace %s\n", window->id, workspace->name);
 
     if (window->id == display.focus) {
         /* the focus follows the window */
@@ -635,7 +639,7 @@ void remove_window_from_workspace(struct window *window)
             if (workspaces[i]->windows[j] == window) {
                 LIST_REMOVE(workspaces[i]->windows, j, 1);
                 update_workspace(workspaces[i]);
-                notef("window %#" PRIx32 " removed from workspace %s\n", window->id, workspaces[i]->name);
+                LOG("window %#" PRIx32 " removed from workspace %s\n", window->id, workspaces[i]->name);
                 return;
             }
         }
@@ -701,18 +705,18 @@ static void change_workspace_monitor(struct workspace *workspace, struct monitor
     /* move all windows by the amount the workspace moved by
      * TODO: move all in bounds in case the monitor size is different
      */
-    for (size_t j = 0; j < workspace->windows_length; j++) {
-        workspace->windows[j]->x += monitor->x - workspace_monitor->x;
-        workspace->windows[j]->y += monitor->y - workspace_monitor->y;
+    for (size_t i = 0; i < workspace->windows_length; i++) {
+        workspace->windows[i]->x += monitor->x - workspace_monitor->x;
+        workspace->windows[i]->y += monitor->y - workspace_monitor->y;
         const uint16_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
-        const uint32_t values[] = { workspace->windows[j]->x, workspace->windows[j]->y };
-        xcb_configure_window(display.xcb, workspace->windows[j]->id, mask, values);
+        const uint32_t values[] = { workspace->windows[i]->x, workspace->windows[i]->y };
+        xcb_configure_window(display.xcb, workspace->windows[i]->outer_id, mask, values);
     }
 
     /* detach the workspace from its monitor */
-    for (size_t j = 0; j < workspace_monitor->workspaces_length; j++) {
-        if (workspace_monitor->workspaces[j] == workspace) {
-            LIST_REMOVE(workspace_monitor->workspaces, j, 1);
+    for (size_t i = 0; i < workspace_monitor->workspaces_length; i++) {
+        if (workspace_monitor->workspaces[i] == workspace) {
+            LIST_REMOVE(workspace_monitor->workspaces, i, 1);
             break;
         }
     }
@@ -720,7 +724,8 @@ static void change_workspace_monitor(struct workspace *workspace, struct monitor
     /* the workspace will be shown */
     if (workspace->state == WORKSPACE_HIDDEN) {
         for (size_t i = 0; i < workspace->windows_length; i++) {
-            xcb_map_window(display.xcb, workspace->windows[i]->id);
+            LOG("window %#" PRIx32 " is shown\n", workspace->windows[i]->outer_id);
+            xcb_map_window(display.xcb, workspace->windows[i]->outer_id);
         }
     }
 
@@ -731,8 +736,9 @@ static void change_workspace_monitor(struct workspace *workspace, struct monitor
             workspace->state = monitor->workspaces[i]->state;
 
             monitor->workspaces[i]->state = WORKSPACE_HIDDEN;
-            for (size_t i = 0; i < monitor->workspaces[i]->windows_length; i++) {
-                xcb_unmap_window(display.xcb, monitor->workspaces[i]->windows[i]->id);
+            for (size_t j = 0; j < monitor->workspaces[i]->windows_length; j++) {
+                LOG("window %#" PRIx32 " is hidden\n", monitor->workspaces[i]->windows[j]->outer_id);
+                xcb_unmap_window(display.xcb, monitor->workspaces[i]->windows[j]->outer_id);
             }
             break;
         }
@@ -771,7 +777,7 @@ void rename_workspace(const utf8_t *name)
 {
     struct workspace *const active = get_active_workspace();
     struct workspace *const workspace = get_workspace(name);
-    notef("workspace %s renamed to");
+    LOG("workspace %s renamed to ");
     if (workspace != NULL) {
         free(workspace->name);
         workspace->name = active->name;
@@ -779,7 +785,7 @@ void rename_workspace(const utf8_t *name)
         free(active->name);
     }
     active->name = xstrdup(name);
-    printf(" %s\n", name);
+    printf("%s\n", name);
 }
 
 /* Notify the workspace module that the focus has changed. */

@@ -87,13 +87,16 @@ void change_window_workspace_directly(struct window *window, struct workspace *w
 
 /* Add a window to a workspace.
  *
+ * A window can only be at one workspace at a time.  This function will remove
+ * the window from its previous workspace.
+ *
  * @name may be `NULL` in which case the window is added to the active
  *       workspace.
  * @window is the newly managed window.
  */
 void add_window_to_workspace(const utf8_t *name, struct window *window);
 
-/* Remove the window from its current workspace. */
+/* Remove a window from its current workspace. */
 void remove_window_from_workspace(struct window *window);
 
 /* Change a window to the specified workspace.
@@ -107,6 +110,9 @@ struct monitor *get_workspace_monitor(struct workspace *workspace);
 
 /* Get the workspace a window is on. */
 struct workspace *get_window_workspace(struct window *window);
+
+/* Get the currently active workspace. */
+struct workspace *get_active_workspace(void);
 
 /* Focus the workspace identified by id @name.
  *

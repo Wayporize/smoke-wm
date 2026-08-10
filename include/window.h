@@ -11,8 +11,13 @@
 struct workspace;
 /* cache for properties and geometry of an X11 window */
 struct window {
-    /* the X11 window id */
-    xcb_window_t id;
+    /* The outer window id and the inner window id.
+     * If a window has a frame, `id` will the be original window and `outer_id`
+     * the frame id.  If the window has no frame, `id` is the window id and
+     * `outer_id` is the exact same. */
+    xcb_window_t id, outer_id;
+    /* graphics context for painting on window frames */
+    xcb_gcontext_t gc;
     /* position and size of the window */
     int32_t x, y, width, height;
     /* the current window state */
@@ -41,6 +46,9 @@ struct window *get_internal_window(xcb_window_t window);
 /* Create and register a new window from an X11 event. */
 void create_window(xcb_create_notify_event_t *event);
 
+/* Redraw the frame of a window. */
+void redraw_window(xcb_window_t id);
+
 /* Change a property of a window.
  *
  * The new property value is just queued for retrieval but no roundtrip to the
@@ -60,11 +68,26 @@ void grab_button_on_all_windows(uint16_t event_mask, uint8_t button, uint16_t mo
 /* Ungrab a button on every managed window. */
 void ungrab_button_on_all_windows(uint8_t button, uint16_t modifiers);
 
+/* Try to focus a window that makes sense or the root if none available. */
+void focus_next_available_window(void);
+
 /* Handle when a client wants to map (show) a window. */
 void handle_map_request(xcb_map_request_event_t *event);
 
 /* Update the focus number of @window to be the most recent. */
+void update_window_focus_number(struct window *window);
+
+/* Update the internal window focus to a new window.
+ *
+ * @window may be `NULL` in which case the root is the new focus.
+ */
 void update_window_focus(struct window *window);
+
+/* Try to focus a window that makes sense or the root if none available. */
+void focus_next_available_window(void);
+
+/* Handle when a client wants to map (show) a window. */
+void handle_map_request(xcb_map_request_event_t *event);
 
 /* Handle when a client wants to change the geometry or stacking of a window. */
 void handle_configure_request(xcb_configure_request_event_t *event);
