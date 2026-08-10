@@ -124,13 +124,13 @@ for b in "${bindings[@]}" ; do
         done < <(xmodmap -pke | grep -E '\<'"$key_symbol"'\>')
     else
         case "$button" in
-        L*) button=0 ;;
-        M*) button=1 ;;
-        R*) button=2 ;;
-        [WS]*U*) button=3 ;;
-        [WS]*D*) button=4 ;;
-        [WS]*L*) button=5 ;;
-        [WS]*R*) button=6 ;;
+        L*) button=1 ;;
+        M*) button=2 ;;
+        R*) button=3 ;;
+        [WS]*U*) button=4 ;;
+        [WS]*D*) button=5 ;;
+        [WS]*L*) button=6 ;;
+        [WS]*R*) button=7 ;;
         esac
         hard_bindings+=("$release $modifiers $button")
     fi

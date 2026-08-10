@@ -64,4 +64,7 @@ const struct action *get_button_binding(bool is_release,
         xkb_mod_mask_t modifiers, xcb_button_t button,
         _Out bool *is_transparent);
 
+/* Grab all current transparent button bindings for the given window. */
+void grab_transparent_button_bindings_for_window(xcb_window_t window);
+
 #endif

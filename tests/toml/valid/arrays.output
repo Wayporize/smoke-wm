@@ -102,4 +102,5 @@ modifiers = 0
 key_symbol = 97
 key_code = 0
 button = 0
-TODO: action, value
+action = NONE
+value =

@@ -138,12 +138,18 @@ void dump_configuration(struct wm *wm)
         printf("key_symbol = %u\n", wm->binding[i].key_symbol);
         printf("key_code = %u\n", wm->binding[i].key_code);
         printf("button = %u\n", wm->binding[i].button);
-        printf("TODO: action, value\n");
+        printf("action = %s\n", get_string_of_action_type(wm->binding[i].action));
+        printf("value = ");
+        print_action_value(wm->binding[i].action, wm->binding[i].value, "");
+        printf("\n");
     }
 
     for (size_t i = 0; i < wm->startup_length; i++) {
         printf("[[STARTUP]]\n");
-        printf("TODO: action, value\n");
+        printf("action = %s\n", get_string_of_action_type(wm->startup[i].action));
+        printf("value = ");
+        print_action_value(wm->startup[i].action, wm->startup[i].value, "");
+        printf("\n");
     }
 }
 
@@ -171,12 +177,16 @@ void clear_configuration(struct wm *wm)
     free(wm->window);
 
     for (size_t i = 0; i < wm->binding_length; i++) {
-        /* wm->binding[i].value TODO: clear action value */
+        if (get_data_type_of_action_type(wm->binding[i].action) == ACTION_DATA_STRING) {
+            free(wm->binding[i].value.string);
+        }
     }
     free(wm->binding);
 
     for (size_t i = 0; i < wm->startup_length; i++) {
-        /* wm->startup[i].value TODO: clear action value */
+        if (get_data_type_of_action_type(wm->startup[i].action) == ACTION_DATA_STRING) {
+            free(wm->startup[i].value.string);
+        }
     }
     free(wm->startup);
 }
@@ -192,7 +202,7 @@ void set_configuration_bindings(struct wm *wm)
         if (wm->binding[i].button != 0) {
             append_button_binding(wm->binding[i].is_release,
                     wm->binding[i].is_transparent,
-                    wm->binding[i].modifiers, wm->binding[i].button - 1,
+                    wm->binding[i].modifiers, wm->binding[i].button,
                     action);
         }
 

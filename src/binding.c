@@ -11,6 +11,7 @@
 
 #include "display.h"
 #include "binding.h"
+#include "window.h"
 
 /* if the binding should pass through to the underlying window */
 #define BINDING_TRANSPARENT 0x1
@@ -20,11 +21,11 @@ struct binding {
     /* an OR combination of the above `BINDING_*` flags */
     unsigned flags;
     /* the actions to execute when the button/key is pressed (terminated by
-     * `ACTION_NULL`)
+     * `ACTION_NONE`)
      */
     struct action *press_actions;
     /* the actions to execute when the button/key is released (terminated by
-     * `ACTION_NULL`)
+     * `ACTION_NONE`)
      */
     struct action *release_actions;
 };
@@ -72,8 +73,8 @@ void dump_bindings(void)
 {
     struct binding *binding;
 
-    for (unsigned kc = 0; kc < SIZE(key_bindings); kc++) {
-        for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
+    for (xkb_keycode_t kc = 0; kc < SIZE(key_bindings); kc++) {
+        for (xkb_mod_mask_t m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
             if (binding->press_actions != NULL) {
                 printf("KP %u %u\n", REVERSE_ADJUST_MODIFIERS(m), kc + 8);
@@ -84,8 +85,8 @@ void dump_bindings(void)
         }
     }
 
-    for (unsigned b = 0; b < button_bindings_length; b++) {
-        for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
+    for (xcb_button_t b = 0; b < button_bindings_length; b++) {
+        for (xkb_mod_mask_t m = 0; m < SIZE(button_bindings[0]); m++) {
             binding = &button_bindings[b][m];
             if (binding->press_actions != NULL) {
                 printf("BP %u %u\n", REVERSE_ADJUST_MODIFIERS(m), b);
@@ -105,26 +106,24 @@ void clear_bindings(void)
     for (unsigned kc = 0; kc < SIZE(key_bindings); kc++) {
         for (unsigned m = 0; m < SIZE(key_bindings[0]); m++) {
             binding = &key_bindings[kc][m];
-
             free(binding->press_actions);
-            binding->press_actions = NULL;
-
             free(binding->release_actions);
-            binding->release_actions = NULL;
+            ZERO(binding, 1);
         }
     }
 
     for (unsigned b = 0; b < button_bindings_length; b++) {
         for (unsigned m = 0; m < SIZE(button_bindings[0]); m++) {
             binding = &button_bindings[b][m];
-
             free(binding->press_actions);
-            binding->press_actions = NULL;
-
             free(binding->release_actions);
-            binding->release_actions = NULL;
+            ZERO(binding, 1);
         }
     }
+
+    xcb_ungrab_key(display.xcb, XCB_GRAB_ANY, display.root, XCB_MOD_MASK_ANY);
+    xcb_ungrab_button(display.xcb, XCB_BUTTON_INDEX_ANY, display.root, XCB_MOD_MASK_ANY);
+    ungrab_button_on_all_windows(XCB_BUTTON_INDEX_ANY, XCB_MOD_MASK_ANY);
 }
 
 /* Append an action to a binding.
@@ -146,18 +145,18 @@ static void append_binding_action(_Nullable struct binding *binding,
 
         /* get the length of the action list */
         if (actions != NULL) {
-            while (actions[length].type != ACTION_NULL) {
+            while (actions[length].type != ACTION_NONE) {
                 length++;
             }
         }
 
-        /* `length` is now the number of actions excluding `ACTION_NULL` so add
-         * 2 for the new `action` and `ACTION_NULL`
+        /* `length` is now the number of actions excluding `ACTION_NONE` so add
+         * 2 for the new `action` and `ACTION_NONE`
          */
         REALLOCATE(actions, length + 2);
         actions[length] = action;
         length++;
-        actions[length].type = ACTION_NULL;
+        actions[length].type = ACTION_NONE;
 
         if (is_release) {
             binding->release_actions = actions;
@@ -191,6 +190,17 @@ void append_key_binding(bool is_release, xkb_mod_mask_t modifiers,
     struct binding *binding;
 
     binding = get_key_binding_pointer(modifiers, key_code);
+
+    /* only grab the key if it was not grabbed before */
+    if (binding->press_actions == NULL && binding->release_actions == NULL) {
+        const xkb_mod_mask_t num_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_NUM);
+        const xkb_mod_mask_t scroll_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_SCROLL);
+        xcb_grab_key(display.xcb, true, display.root, modifiers, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+        xcb_grab_key(display.xcb, true, display.root, modifiers | num_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+        xcb_grab_key(display.xcb, true, display.root, modifiers | scroll_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+        xcb_grab_key(display.xcb, true, display.root, modifiers | num_mask | scroll_mask, key_code, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    }
+
     append_binding_action(binding, is_release, action);
 }
 
@@ -279,9 +289,7 @@ static struct binding *get_button_binding_pointer(xkb_mod_mask_t modifiers,
     modifiers = adjust_modifiers(modifiers);
 
     if (button >= button_bindings_length) {
-        uint32_t new_length;
-
-        new_length = button + 1;
+        const uint32_t new_length = button + 1;
         REALLOCATE(button_bindings, new_length);
         ZERO(&button_bindings[button_bindings_length],
                 new_length - button_bindings_length);
@@ -298,12 +306,31 @@ void append_button_binding(bool is_release, bool is_transparent,
     struct binding *binding;
 
     binding = get_button_binding_pointer(modifiers, button);
-    if (binding != NULL) {
-        append_binding_action(binding, is_release, action);
-        if (is_transparent) {
+
+    /* only grab the button if it was not grabbed before */
+    if (binding->press_actions == NULL && binding->release_actions == NULL) {
+        const xkb_mod_mask_t num_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_NUM);
+        const xkb_mod_mask_t scroll_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_SCROLL);
+        uint16_t event_mask = XCB_EVENT_MASK_BUTTON_PRESS;
+        if (is_release) {
+            event_mask |= XCB_EVENT_MASK_BUTTON_RELEASE;
+        }
+        /* transparent buttons are grabbed per window and not on the root */
+        if (!is_transparent) {
+            xcb_grab_button(display.xcb, true, display.root, event_mask, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, button, modifiers);
+            xcb_grab_button(display.xcb, true, display.root, event_mask, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, button, modifiers | num_mask);
+            xcb_grab_button(display.xcb, true, display.root, event_mask, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, button, modifiers | scroll_mask);
+            xcb_grab_button(display.xcb, true, display.root, event_mask, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, button, modifiers | num_mask | scroll_mask);
+        } else {
             binding->flags |= BINDING_TRANSPARENT;
+            grab_button_on_all_windows(event_mask, button, modifiers);
+            grab_button_on_all_windows(event_mask, button, modifiers | num_mask);
+            grab_button_on_all_windows(event_mask, button, modifiers | scroll_mask);
+            grab_button_on_all_windows(event_mask, button, modifiers | num_mask | scroll_mask);
         }
     }
+
+    append_binding_action(binding, is_release, action);
 }
 
 /* Get a list of actions associated to a button. */
@@ -324,4 +351,29 @@ const struct action *get_button_binding(bool is_release,
         *is_transparent = !!(binding->flags & BINDING_TRANSPARENT);
     }
     return actions;
+}
+
+/* Grab all current transparent button bindings for the given window. */
+void grab_transparent_button_bindings_for_window(xcb_window_t window)
+{
+    const xkb_mod_mask_t num_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_NUM);
+    const xkb_mod_mask_t scroll_mask = xkb_keymap_mod_get_mask(display.keymap, XKB_VMOD_NAME_SCROLL);
+    for (xcb_button_t i = 0; i < button_bindings_length; i++) {
+        for (xkb_mod_mask_t j = 0; j < SIZE(button_bindings[0]); j++) {
+            if ((button_bindings[i][j].flags & BINDING_TRANSPARENT)) {
+                uint16_t event_mask = XCB_EVENT_MASK_BUTTON_PRESS;
+                if (button_bindings[i][j].release_actions != NULL) {
+                    event_mask |= XCB_EVENT_MASK_BUTTON_RELEASE;
+                }
+                const xkb_mod_mask_t modifiers = REVERSE_ADJUST_MODIFIERS(j);
+                /* use SYNC instead of ASYNC such that we can replay events so
+                 * that we handle the event but also send it to the underlying
+                 * window */
+                xcb_grab_button(display.xcb, true, window, event_mask, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, i, modifiers);
+                xcb_grab_button(display.xcb, true, window, event_mask, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, i, modifiers | num_mask);
+                xcb_grab_button(display.xcb, true, window, event_mask, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, i, modifiers | scroll_mask);
+                xcb_grab_button(display.xcb, true, window, event_mask, XCB_GRAB_MODE_SYNC, XCB_GRAB_MODE_ASYNC, XCB_NONE, XCB_NONE, i, modifiers | num_mask | scroll_mask);
+            }
+        }
+    }
 }

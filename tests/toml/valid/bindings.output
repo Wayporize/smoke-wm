@@ -38,7 +38,8 @@ modifiers = 1
 key_symbol = 0
 key_code = 24
 button = 0
-TODO: action, value
+action = CLOSE
+value =
 [[BINDING]]
 release = 0
 transparent = 0
@@ -46,7 +47,8 @@ modifiers = 64
 key_symbol = 104
 key_code = 0
 button = 0
-TODO: action, value
+action = RUN
+value = xterm
 [[BINDING]]
 release = 0
 transparent = 1
@@ -54,7 +56,8 @@ modifiers = 0
 key_symbol = 0
 key_code = 0
 button = 1
-TODO: action, value
+action = FOCUS
+value = pressed
 [[BINDING]]
 release = 0
 transparent = 0
@@ -62,7 +65,8 @@ modifiers = 64
 key_symbol = 97
 key_code = 0
 button = 0
-TODO: action, value
+action = RUN
+value = xterm
 [[BINDING]]
 release = 0
 transparent = 0
@@ -70,4 +74,5 @@ modifiers = 127
 key_symbol = 0
 key_code = 0
 button = 5
-TODO: action, value
+action = (null)
+value =

@@ -730,6 +730,34 @@ static void handle_selection_clear(xcb_selection_clear_event_t *event)
     }
 }
 
+/* Handle a key being pressed/released. */
+void handle_key_press_or_release(xcb_key_press_event_t *event, bool is_release)
+{
+    const struct action *binding = get_key_binding(is_release, event->state, event->detail);
+    if (binding != NULL) {
+        for (; binding[0].type != ACTION_NONE; binding++) {
+            execute_action(&binding[0]);
+        }
+    }
+}
+
+/* Handle a button being pressed/released. */
+void handle_button_press_or_release(xcb_button_press_event_t *event, bool is_release)
+{
+    bool is_transparent;
+    const struct action *binding = get_button_binding(is_release, event->state, event->detail, &is_transparent);
+    if (binding != NULL) {
+        for (; binding[0].type != ACTION_NONE; binding++) {
+            execute_action(&binding[0]);
+        }
+    }
+    /* replay transparent events such that the underlying window also receives
+     * them */
+    if (is_transparent) {
+        xcb_allow_events(display.xcb, XCB_ALLOW_REPLAY_POINTER, XCB_CURRENT_TIME);
+    }
+}
+
 /* Handle an incoming client message. */
 void handle_client_message(xcb_client_message_event_t *event)
 {
@@ -785,6 +813,16 @@ void handle_server_events(void)
                 handle_selection_clear((xcb_selection_clear_event_t*) event);
                 break;
 
+            case XCB_KEY_PRESS:
+            case XCB_KEY_RELEASE: /* the user pressed or released a grabbed key */
+                handle_key_press_or_release((xcb_key_press_event_t*) event, event->response_type == XCB_KEY_RELEASE);
+                break;
+
+            case XCB_BUTTON_PRESS:
+            case XCB_BUTTON_RELEASE: /* the user pressed or released a grabbed button */
+                handle_button_press_or_release((xcb_button_press_event_t*) event, event->response_type == XCB_BUTTON_RELEASE);
+                break;
+
             case XCB_CREATE_NOTIFY: /* a window was created */
                 create_window((xcb_create_notify_event_t*) event);
                 break;
@@ -811,8 +849,12 @@ void handle_server_events(void)
                 focus = (xcb_focus_in_event_t*) event;
                 /* other modes are related to grabs which are just temporary
                  * which does not concern us for now
+                 *
+                 * however, there is an edge case with key bindings which open a
+                 * window, so there is an active grab... just checking for
+                 * ungrabs seems safe
                  */
-                if (focus->mode == XCB_NOTIFY_MODE_NORMAL) {
+                if (focus->mode == XCB_NOTIFY_MODE_NORMAL || focus->mode == XCB_NOTIFY_MODE_UNGRAB) {
                     /* the window got directly focused */
                     if (focus->detail == XCB_NOTIFY_DETAIL_NONLINEAR ||
                             /* "virtual" means an inferior got focused but not the
@@ -839,6 +881,7 @@ void handle_server_events(void)
                         struct window *const window = get_internal_window(focus->event);
                         if (window != NULL) {
                             report_focus_change_to_workspaces(window);
+                            update_window_focus(window);
                         }
                     } else if (focus->detail == XCB_NOTIFY_DETAIL_NONE ||
                             focus->detail == XCB_NOTIFY_DETAIL_POINTER_ROOT) {
@@ -849,6 +892,18 @@ void handle_server_events(void)
                 }
                 break;
             }
+
+            case (0x80 | XCB_UNMAP_NOTIFY): /* a client wants to withdraw a window */
+                change_window_state(((xcb_unmap_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+                break;
+
+            case XCB_UNMAP_NOTIFY: /* a window was hidden */
+                change_window_state(((xcb_unmap_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_ICONIC);
+                break;
+
+            case XCB_MAP_NOTIFY: /* a window was shown */
+                change_window_state(((xcb_map_notify_event_t*) event)->window, XCB_ICCCM_WM_STATE_NORMAL);
+                break;
 
             case XCB_DESTROY_NOTIFY: /* a window was destroyed */
                 destroy_window((xcb_destroy_notify_event_t*) event);
@@ -862,11 +917,6 @@ void handle_server_events(void)
                 handle_client_message((xcb_client_message_event_t*) event);
                 break;
 
-            case XCB_UNMAP_NOTIFY: /* a window was hidden */
-                /* TODO: react to this by setting the window state,
-                 * also react to the synthetic event which carries extra meaning
-                 */
-            case XCB_MAP_NOTIFY: /* a window was shown */
             case XCB_FOCUS_OUT: /* a window lost focus */
                 /* ignore */
                 break;

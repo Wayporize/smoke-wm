@@ -59,7 +59,7 @@ sandbox: build
 	$(SANDBOX) &
 	# wait for x server to start
 	sleep 1
-	DISPLAY=$(SANDBOX_DISPLAY) ./$(BUILD_PREFIX)/smoke-wm
+	DISPLAY=$(SANDBOX_DISPLAY) ./xinitrc
 	pkill Xephyr
 
 gdb-sandbox: build

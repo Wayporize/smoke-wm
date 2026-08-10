@@ -28,10 +28,10 @@ static void parse_layout(struct toml_parse_context *context, enum tiling_layout 
 static enum window_mode resolve_window_mode(struct toml_parse_context *context, const char *string);
 /* Translate the given string to a button index. */
 static xcb_button_t resolve_button(struct toml_parse_context *context, const char *name);
-static enum action_type resolve_action(struct toml_parse_context *context, const char *string);
+static enum action_type resolve_action_type(struct toml_parse_context *context, const char *string);
 static union action_value resolve_action_value( struct toml_parse_context *context, const char *string);
-static void parse_action(struct toml_parse_context *context, enum action_type *type);
-static void parse_action_value(struct toml_parse_context *context, union action_value *value);
+static void parse_action_type(struct toml_parse_context *context, enum action_type *type);
+static void parse_action_argument(struct toml_parse_context *context, union action_value *value);
 
 /* parse functions for specific keys */
 static void parse_wm_tiling_layout(struct toml_parse_context *context);
@@ -63,10 +63,10 @@ static void parse_wm_binding_button(struct toml_parse_context *context);
 static void parse_wm_binding_key(struct toml_parse_context *context);
 static void parse_wm_binding_key_code(struct toml_parse_context *context);
 static void parse_wm_binding_action(struct toml_parse_context *context);
-static void parse_wm_binding_value(struct toml_parse_context *context);
+static void parse_wm_binding_argument(struct toml_parse_context *context);
 static void parse_wm_bindings(struct toml_parse_context *context);
 static void parse_wm_startup_action(struct toml_parse_context *context);
-static void parse_wm_startup_value(struct toml_parse_context *context);
+static void parse_wm_startup_argument(struct toml_parse_context *context);
 
 /* definition of all tables and their sub table relation */
 static const struct {
@@ -138,12 +138,12 @@ static const struct {
             { 3, "key", parse_wm_binding_key, NULL },
             { 3, "key-code", parse_wm_binding_key_code, NULL },
             { 3, "action", parse_wm_binding_action, NULL },
-            { 3, "argument", parse_wm_binding_value, NULL },
+            { 3, "argument", parse_wm_binding_argument, NULL },
         { 2, "bindings", NULL, NULL },
             { 3, "*", parse_wm_bindings, NULL },
         { 2, "startup", NULL, append_wm_startup },
             { 3, "action", parse_wm_startup_action, NULL },
-            { 3, "argument", parse_wm_startup_value, NULL },
+            { 3, "argument", parse_wm_startup_argument, NULL },
 };
 
 /* Get a table index of the table name @name that is a sub table of @table. */
@@ -389,14 +389,17 @@ static xcb_button_t resolve_button(struct toml_parse_context *context,
         { "LButton", 1 },
         { "Left", 1 },
         { "LeftButton", 1 },
+        { "M1", 1 },
 
         { "MButton", 2 },
         { "Middle", 2 },
         { "MiddleButton", 2 },
+        { "M2", 2 },
 
         { "RButton", 3 },
         { "Right", 3 },
         { "RightButton", 3 },
+        { "M3", 3 },
 
         { "ScrollUp", 4 },
         { "WheelUp", 4 },
@@ -467,13 +470,15 @@ static xcb_button_t resolve_button(struct toml_parse_context *context,
     return index;
 }
 
-static enum action_type resolve_action(struct toml_parse_context *context,
+static enum action_type resolve_action_type(struct toml_parse_context *context,
         const char *string)
 {
-    (void) context;
-    (void) string;
-    /* TODO: implement when actions are there */
-    return ACTION_NULL;
+    const enum action_type type = convert_string_to_action_type(string);
+    if (type == ACTION_NULL) {
+        emit_error(context, "invalid action");
+    }
+    context->action_data_type = get_data_type_of_action_type(type);
+    return type;
 }
 
 static union action_value resolve_action_value(
@@ -482,22 +487,34 @@ static union action_value resolve_action_value(
 {
     union action_value value;
 
-    (void) context;
-    (void) string;
-    /* TODO: implement when actions are there */
-    value.value = 0;
+    if (context->action_data_type == ACTION_DATA_NULL) {
+        emit_error(context, "which action is this an argument for?");
+    }
+
+    if (context->action_data_type == ACTION_DATA_STRING) {
+        value.string = xstrdup(string);
+    } else if (isdigit(string[0])) {
+        value.integer = 0;
+        while (isdigit(string[0])) {
+            value.integer *= 10;
+            value.integer += string[0] - '0';
+            string++;
+        }
+    } else {
+        emit_error(context, "invalid action data type");
+    }
 
     return value;
 }
 
-static void parse_action(struct toml_parse_context *context,
+static void parse_action_type(struct toml_parse_context *context,
         enum action_type *type)
 {
     read_any_string(context);
-    *type = resolve_action(context, context->string);
+    *type = resolve_action_type(context, context->string);
 }
 
-static void parse_action_value(struct toml_parse_context *context,
+static void parse_action_argument(struct toml_parse_context *context,
         union action_value *value)
 {
     read_any_string(context);
@@ -600,134 +617,113 @@ static void parse_wm_border_color(struct toml_parse_context *context)
 static void parse_wm_output_name(struct toml_parse_context *context)
 {
     if (context->wm.output_length == 0) {
-        emit_error(context,
-                "can not modify 'output' if no entry was defined yet");
+        emit_error(context, "can not modify 'output' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.output[context->wm.output_length - 1].name);
-    context->wm.output[context->wm.output_length - 1].name =
-        xstrdup(context->string);
+    context->wm.output[context->wm.output_length - 1].name = xstrdup(context->string);
 }
 
 static void parse_wm_output_layout(struct toml_parse_context *context)
 {
     if (context->wm.output_length == 0) {
-        emit_error(context,
-                "can not modify 'output' if no entry was defined yet");
+        emit_error(context, "can not modify 'output' if no entry was defined yet");
     }
 
-    parse_layout(context,
-            &context->wm.output[context->wm.output_length - 1].layout);
+    parse_layout(context, &context->wm.output[context->wm.output_length - 1].layout);
 }
 
 static void parse_wm_workspace_name(struct toml_parse_context *context)
 {
     if (context->wm.workspace_length == 0) {
-        emit_error(context,
-                "can not modify 'workspace' if no entry was defined yet");
+        emit_error(context, "can not modify 'workspace' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.workspace[context->wm.workspace_length - 1].name);
-    context->wm.workspace[context->wm.workspace_length - 1].name =
-        xstrdup(context->string);
+    context->wm.workspace[context->wm.workspace_length - 1].name = xstrdup(context->string);
 }
 
 static void parse_wm_workspace_output(struct toml_parse_context *context)
 {
     if (context->wm.workspace_length == 0) {
-        emit_error(context,
-                "can not modify 'workspace' if no entry was defined yet");
+        emit_error(context, "can not modify 'workspace' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.workspace[context->wm.workspace_length - 1].output);
-    context->wm.workspace[context->wm.workspace_length - 1].output =
-        xstrdup(context->string);
+    context->wm.workspace[context->wm.workspace_length - 1].output = xstrdup(context->string);
 }
 
 static void parse_wm_workspace_layout(struct toml_parse_context *context)
 {
     if (context->wm.workspace_length == 0) {
-        emit_error(context,
-                "can not modify 'workspace' if no entry was defined yet");
+        emit_error(context, "can not modify 'workspace' if no entry was defined yet");
     }
 
-    parse_layout(context,
-            &context->wm.workspace[context->wm.workspace_length - 1].layout);
+    parse_layout(context, &context->wm.workspace[context->wm.workspace_length - 1].layout);
 }
 
 static void parse_wm_window_name(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.window[context->wm.window_length - 1].name);
-    context->wm.window[context->wm.window_length - 1].name =
-        xstrdup(context->string);
+    context->wm.window[context->wm.window_length - 1].name = xstrdup(context->string);
 }
 
 static void parse_wm_window_class(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.window[context->wm.window_length - 1].class);
-    context->wm.window[context->wm.window_length - 1].class =
-        xstrdup(context->string);
+    context->wm.window[context->wm.window_length - 1].class = xstrdup(context->string);
 }
 
 static void parse_wm_window_instance(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.window[context->wm.window_length - 1].instance);
-    context->wm.window[context->wm.window_length - 1].instance =
-        xstrdup(context->string);
+    context->wm.window[context->wm.window_length - 1].instance = xstrdup(context->string);
 }
 
 static void parse_wm_window_workspace(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.window[context->wm.window_length - 1].workspace);
-    context->wm.window[context->wm.window_length - 1].workspace =
-        xstrdup(context->string);
+    context->wm.window[context->wm.window_length - 1].workspace = xstrdup(context->string);
 }
 
 static void parse_wm_window_output(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
     free(context->wm.window[context->wm.window_length - 1].output);
-    context->wm.window[context->wm.window_length - 1].output =
-        xstrdup(context->string);
+    context->wm.window[context->wm.window_length - 1].output = xstrdup(context->string);
 }
 
 static void parse_wm_window_hidden(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_boolean(context);
@@ -739,8 +735,7 @@ static void parse_wm_window_mode(struct toml_parse_context *context)
     enum window_mode mode;
 
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
     read_any_string(context);
@@ -751,70 +746,58 @@ static void parse_wm_window_mode(struct toml_parse_context *context)
 static void parse_wm_window_border_size(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
-    parse_border_size(context,
-            &context->wm.window[context->wm.window_length - 1].border);
+    parse_border_size(context, &context->wm.window[context->wm.window_length - 1].border);
 }
 
 static void parse_wm_window_border_decoration(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
-    parse_border_decoration(context,
-            &context->wm.window[context->wm.window_length - 1].border);
+    parse_border_decoration(context, &context->wm.window[context->wm.window_length - 1].border);
 }
 
 static void parse_wm_window_border_radius(
         struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
-    parse_border_radius(context,
-            &context->wm.window[context->wm.window_length - 1].border);
+    parse_border_radius(context, &context->wm.window[context->wm.window_length - 1].border);
 }
 
 static void parse_wm_window_border_color(struct toml_parse_context *context)
 {
     if (context->wm.window_length == 0) {
-        emit_error(context,
-                "can not modify 'window' if no entry was defined yet");
+        emit_error(context, "can not modify 'window' if no entry was defined yet");
     }
 
-    parse_border_color(context,
-            &context->wm.window[context->wm.window_length - 1].border);
+    parse_border_color(context, &context->wm.window[context->wm.window_length - 1].border);
 }
 
 static void parse_wm_binding_transparent(struct toml_parse_context *context)
 {
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_boolean(context);
-    context->wm.binding[context->wm.binding_length - 1].is_transparent =
-        context->number;
+    context->wm.binding[context->wm.binding_length - 1].is_transparent = context->number;
 }
 
 static void parse_wm_binding_release(struct toml_parse_context *context)
 {
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_boolean(context);
-    context->wm.binding[context->wm.binding_length - 1].is_release =
-        context->number;
+    context->wm.binding[context->wm.binding_length - 1].is_release = context->number;
 }
 
 static void parse_wm_binding_modifiers(struct toml_parse_context *context)
@@ -823,8 +806,7 @@ static void parse_wm_binding_modifiers(struct toml_parse_context *context)
     uint16_t modifiers = 0;
 
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_any_string(context);
@@ -840,8 +822,7 @@ static void parse_wm_binding_modifiers(struct toml_parse_context *context)
         name = plus + 1;
     } while (plus != NULL);
 
-    context->wm.binding[context->wm.binding_length - 1].modifiers =
-        modifiers;
+    context->wm.binding[context->wm.binding_length - 1].modifiers = modifiers;
 }
 
 static void parse_wm_binding_button(struct toml_parse_context *context)
@@ -849,14 +830,12 @@ static void parse_wm_binding_button(struct toml_parse_context *context)
     xcb_button_t button;
 
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_any_string(context);
     button = resolve_button(context, context->string);
-    context->wm.binding[context->wm.binding_length - 1].button =
-        button;
+    context->wm.binding[context->wm.binding_length - 1].button = button;
 }
 
 static void parse_wm_binding_key(struct toml_parse_context *context)
@@ -864,8 +843,7 @@ static void parse_wm_binding_key(struct toml_parse_context *context)
     xkb_keysym_t key_symbol;
 
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_any_string(context);
@@ -873,48 +851,41 @@ static void parse_wm_binding_key(struct toml_parse_context *context)
     if (key_symbol == XKB_KEY_NoSymbol) {
         printf("invalid key symbol: %s\n", context->string);
     } else {
-        context->wm.binding[context->wm.binding_length - 1].key_symbol =
-            key_symbol;
+        context->wm.binding[context->wm.binding_length - 1].key_symbol = key_symbol;
     }
 }
 
 static void parse_wm_binding_key_code(struct toml_parse_context *context)
 {
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
     read_integer(context);
     if (!xkb_keycode_is_legal_x11(context->number)) {
-        emit_error(context,
-                "%ld is not a valid x11 keycode\n", context->number);
+        emit_error(context, "%ld is not a valid x11 keycode\n", context->number);
     } else {
-        context->wm.binding[context->wm.binding_length - 1].key_code =
-            context->number;
+        context->wm.binding[context->wm.binding_length - 1].key_code = context->number;
     }
 }
 
 static void parse_wm_binding_action(struct toml_parse_context *context)
 {
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
-    parse_action(context,
-            &context->wm.binding[context->wm.binding_length - 1].action);
+    parse_action_type(context, &context->wm.binding[context->wm.binding_length - 1].action);
+    ZERO(&context->wm.binding[context->wm.binding_length - 1].value, 1);
 }
 
-static void parse_wm_binding_value(struct toml_parse_context *context)
+static void parse_wm_binding_argument(struct toml_parse_context *context)
 {
     if (context->wm.binding_length == 0) {
-        emit_error(context,
-                "can not modify 'binding' if no entry was defined yet");
+        emit_error(context, "can not modify 'binding' if no entry was defined yet");
     }
 
-    parse_action_value(context,
-            &context->wm.binding[context->wm.binding_length - 1].value);
+    parse_action_argument(context, &context->wm.binding[context->wm.binding_length - 1].value);
 }
 
 /* Parse keys within a [wm.bindings] table. */
@@ -945,10 +916,11 @@ static void parse_wm_bindings(struct toml_parse_context *context)
     colon = strchr(context->string, ':');
     if (colon != NULL) {
         colon[0] = '\0';
+    }
+    binding.action = resolve_action_type(context, context->string);
+    if (colon != NULL) {
         binding.value = resolve_action_value(context, colon + 1);
     }
-
-    binding.action = resolve_action(context, context->string);
 
     LIST_APPEND_VALUE(context->wm.binding, binding);
 }
@@ -956,23 +928,20 @@ static void parse_wm_bindings(struct toml_parse_context *context)
 static void parse_wm_startup_action(struct toml_parse_context *context)
 {
     if (context->wm.startup_length == 0) {
-        emit_error(context,
-                "can not modify 'startup' if no entry was defined yet");
+        emit_error(context, "can not modify 'startup' if no entry was defined yet");
     }
 
-    parse_action(context,
-            &context->wm.startup[context->wm.startup_length - 1].action);
+    parse_action_type(context, &context->wm.startup[context->wm.startup_length - 1].action);
+    ZERO(&context->wm.startup[context->wm.startup_length - 1].value, 1);
 }
 
-static void parse_wm_startup_value(struct toml_parse_context *context)
+static void parse_wm_startup_argument(struct toml_parse_context *context)
 {
     if (context->wm.startup_length == 0) {
-        emit_error(context,
-                "can not modify 'startup' if no entry was defined yet");
+        emit_error(context, "can not modify 'startup' if no entry was defined yet");
     }
 
-    parse_action_value(context,
-            &context->wm.startup[context->wm.startup_length - 1].value);
+    parse_action_argument(context, &context->wm.startup[context->wm.startup_length - 1].value);
 }
 
 /* Parse a table header [[?word(.word)*]?] and move into the table. */

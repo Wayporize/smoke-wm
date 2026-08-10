@@ -133,7 +133,7 @@ extern struct wm {
         xkb_keysym_t key_symbol;
         /* the key code (usually specific key on the keyboard) */
         xkb_keycode_t key_code;
-        /* mouse button; 0 if no button defined, otherwise 1+index */
+        /* mouse button; 0 if no button defined, otherwise the button index */
         xcb_button_t button;
         /* the action to trigger */
         enum action_type action;
